@@ -19,6 +19,10 @@ typedef std::string	mystring;
 #endif // UNICODE
 
 HANDLE g_evtListen[WSA_MAXIMUM_WAIT_EVENTS];
+DWORD g_nListens = 0;
+HANDLE g_evtConnect[WSA_MAXIMUM_WAIT_EVENTS];
+SOCKET g_sockConnect[WSA_MAXIMUM_WAIT_EVENTS];
+DWORD g_nConnects = 0;
 
 void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
 {
@@ -40,6 +44,7 @@ LPFN_GETACCEPTEXSOCKADDRS	IOCPBase::m_pfnAcceptExSockaddrs = NULL;
 LPFN_DISCONNECTEX	IOCPBase::m_pfnConnectEx = NULL;
 HANDLE IOCPBase::m_hIocp = INVALID_HANDLE_VALUE;
 PListen_Handle IOCPBase::m_pListenHandle = NULL;
+SOCKET IOCPBase::m_sockSUnit = INVALID_SOCKET;
 DWORD IOCPBase::m_dwCpunums = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
 
@@ -207,7 +212,7 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 			log_printf(_T("初始化监听端口失败:%d"), WSAGetLastError());
 			break;
 		}
-		g_evtListen[0] = m_pListenHandle->evtPostAcceptEx;
+		g_evtListen[g_nListens++] = m_pListenHandle->evtPostAcceptEx;
 
 		struct sockaddr_in laddr;
 		memset(&laddr, 0x00, sizeof(laddr));
@@ -230,6 +235,29 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 	} while (FALSE);
 	
 	return FALSE;
+}
+
+BOOL IOCPBase::InitSUnit(TCHAR* _sip, USHORT _port)
+{
+	HANDLE evtSUnit = WSACreateEvent();
+
+	m_sockSUnit = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	struct sockaddr_in addr;
+	memset(&addr, 0x00, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(_port);
+	InetPton(AF_INET, _sip, &addr.sin_addr.s_addr);
+
+	if (SOCKET_ERROR == WSAEventSelect(m_sockSUnit, evtSUnit,  FD_CONNECT | FD_READ | FD_WRITE | FD_CLOSE))
+	{
+		log_printf(_T("连接SUnit服务失败:%d"), WSAGetLastError());
+		return FALSE;
+	}
+	g_sockConnect[g_nConnects] = m_sockSUnit;
+	g_evtConnect[g_nConnects++] = evtSUnit;
+
+	connect(m_sockSUnit, (const sockaddr*)&addr, sizeof(addr));
+	return TRUE;
 }
 
 BOOL IOCPBase::GetCpuNumsAndPagesize()
@@ -260,12 +288,79 @@ BOOL IOCPBase::StartServer()
 	return 0;
 }
 
+unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
+{
+	while (true)
+	{
+		DWORD dwIndex = WSAWaitForMultipleEvents(g_nConnects, g_evtConnect, FALSE, INFINITE, FALSE);
+		if (WSA_WAIT_FAILED == dwIndex)
+		{
+			log_printf(_T("异常退出:%d"), WSAGetLastError());
+			return 0;
+		}
+		DWORD dwRealIndex = dwIndex - WSA_WAIT_EVENT_0;
+
+		WSANETWORKEVENTS networkEvents;
+		if (SOCKET_ERROR == WSAEnumNetworkEvents(g_sockConnect[dwRealIndex], g_evtConnect[dwRealIndex], &networkEvents))
+		{
+			log_printf(_T("检测触发事件失败:%d"), WSAGetLastError());
+			continue;
+		}
+		if (networkEvents.lNetworkEvents & FD_CONNECT)
+		{
+			if (networkEvents.iErrorCode[FD_CONNECT_BIT])
+			{
+				log_printf(_T("检测触发事件失败:%d"), WSAGetLastError());
+				continue;
+			}
+			else // 处理连接
+			{
+
+			}
+		}
+		else if (networkEvents.lNetworkEvents & FD_READ)
+		{
+			if (networkEvents.iErrorCode[FD_READ_BIT])
+			{
+
+			}
+			else
+			{
+
+			}
+		}
+		else if (networkEvents.lNetworkEvents & FD_WRITE)
+		{
+			if (networkEvents.iErrorCode[FD_WRITE_BIT])
+			{
+
+			}
+			else
+			{
+
+			}
+		}
+		else if (networkEvents.lNetworkEvents & FD_CLOSE)
+		{
+			if (networkEvents.iErrorCode[FD_CLOSE_BIT])
+			{
+
+			}
+			else
+			{
+
+			}
+		}
+	}
+	return 0;
+}
+
 unsigned int _stdcall IOCPBase::toolthread(PVOID pVoid)
 {
 	while (true)
 	{
-		int ErrCode = WSAWaitForMultipleEvents(1, g_evtListen, FALSE, INFINITE, FALSE);
-		if (WSA_WAIT_FAILED == ErrCode)
+		DWORD dwIndex = WSAWaitForMultipleEvents(g_nListens, g_evtListen, FALSE, INFINITE, FALSE);
+		if (WSA_WAIT_FAILED == dwIndex)
 		{
 			log_printf(_T("异常退出:%d"), WSAGetLastError());
 			return 0;

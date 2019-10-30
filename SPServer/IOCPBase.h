@@ -16,9 +16,11 @@ private:
 	static BOOL GetExtensFunction();		// 获取外部扩展函数
 	static BOOL CreateIoCompletionPortHandle();	// 创建端口
 	static BOOL InitListenSocket(USHORT _port);			// 初始化监听端口
+	static BOOL InitSUnit(TCHAR* _sip, USHORT _port);
 	static BOOL GetCpuNumsAndPagesize();
 	static BOOL StartServer();					// 启动服务线程
 
+	static unsigned int _stdcall sunitthread(PVOID pVoid);
 	static unsigned int _stdcall toolthread(PVOID pVoid);
 	static unsigned int _stdcall workthread(PVOID pVoid);
 
@@ -29,6 +31,7 @@ private:
 	static LPFN_DISCONNECTEX	m_pfnConnectEx;
 	static HANDLE m_hIocp;
 	static PListen_Handle m_pListenHandle;
+	static SOCKET m_sockSUnit;
 	static DWORD m_dwCpunums;
 	static DWORD m_dwPagesize;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
