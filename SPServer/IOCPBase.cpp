@@ -365,6 +365,7 @@ unsigned int _stdcall IOCPBase::toolthread(PVOID pVoid)
 			log_printf(_T("Òì³£ÍË³ö:%d"), WSAGetLastError());
 			return 0;
 		}
+		WSAResetEvent(g_evtListen[dwIndex - WSA_WAIT_EVENT_0]);
 
 		for (DWORD i = 0; i < m_dwCpunums * 2; i++)
 		{
