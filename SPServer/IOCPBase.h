@@ -19,7 +19,8 @@ private:
 	static BOOL GetCpuNumsAndPagesize();
 	static BOOL StartServer();					// 启动服务线程
 
-	static unsigned int _stdcall workthread(LPVOID pVoid);
+	static unsigned int _stdcall toolthread(PVOID pVoid);
+	static unsigned int _stdcall workthread(PVOID pVoid);
 
 private:
 	HANDLE m_hUniqueInstance;	// HANDLE句柄指的是核心对象在某一个进程中的唯一索引，而不是指针。使用（INVALID_HANDLE_VALUE）初始化

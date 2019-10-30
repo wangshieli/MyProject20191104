@@ -11,13 +11,14 @@
 typedef std::wstring	mystring;
 #endif // _STRING_
 #else
-#define __MY_FINE__		__FILE__
-#define __MY_FUNCTION__		__FUNCTION__
+#define __MYFINE__		__FILE__
+#define __MYFUNCTION__		__FUNCTION__
 #ifdef _STRING_
 typedef std::string	mystring;
 #endif // _STRING_
 #endif // UNICODE
 
+HANDLE g_evtListen[WSA_MAXIMUM_WAIT_EVENTS];
 
 void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
 {
@@ -61,6 +62,8 @@ IOCPBase::~IOCPBase()
 	{
 		closesocket(m_pListenHandle->sListenSock);
 		m_pListenHandle->sListenSock = INVALID_SOCKET;
+		if (WSA_INVALID_EVENT != m_pListenHandle->evtPostAcceptEx)
+			WSACloseEvent(m_pListenHandle->evtPostAcceptEx);
 		delete m_pListenHandle;
 		m_pListenHandle = NULL;
 	}
@@ -176,6 +179,14 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 			log_printf(_T("初始化监听端口失败:%d"), WSAGetLastError());
 			break;
 		}
+
+		m_pListenHandle->evtPostAcceptEx = WSACreateEvent();
+		if (WSA_INVALID_EVENT == m_pListenHandle->evtPostAcceptEx)
+		{
+			log_printf(_T("初始化监听端口失败:%d"), WSAGetLastError());
+			break;
+		}
+
 		m_pListenHandle->sListenSock = INVALID_SOCKET;
 
 		m_pListenHandle->sListenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
@@ -190,6 +201,13 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 			log_printf(_T("初始化监听端口失败:%d"), WSAGetLastError());
 			break;
 		}
+
+		if (SOCKET_ERROR == WSAEventSelect(m_pListenHandle->sListenSock, m_pListenHandle->evtPostAcceptEx, FD_ACCEPT))
+		{
+			log_printf(_T("初始化监听端口失败:%d"), WSAGetLastError());
+			break;
+		}
+		g_evtListen[0] = m_pListenHandle->evtPostAcceptEx;
 
 		struct sockaddr_in laddr;
 		memset(&laddr, 0x00, sizeof(laddr));
@@ -226,6 +244,8 @@ BOOL IOCPBase::GetCpuNumsAndPagesize()
 
 BOOL IOCPBase::StartServer()
 {
+	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, toolthread, NULL, 0, NULL);
+
 	DWORD _dwThreadCounts = m_dwCpunums * 2 + 2;
 	for (DWORD i = 0; i < _dwThreadCounts; i++)
 	{
@@ -240,7 +260,26 @@ BOOL IOCPBase::StartServer()
 	return 0;
 }
 
-unsigned int _stdcall IOCPBase::workthread(LPVOID pVoid)
+unsigned int _stdcall IOCPBase::toolthread(PVOID pVoid)
+{
+	while (true)
+	{
+		int ErrCode = WSAWaitForMultipleEvents(1, g_evtListen, FALSE, INFINITE, FALSE);
+		if (WSA_WAIT_FAILED == ErrCode)
+		{
+			log_printf(_T("异常退出:%d"), WSAGetLastError());
+			return 0;
+		}
+
+		for (DWORD i = 0; i < m_dwCpunums * 2; i++)
+		{
+			postAcceptEx();
+		}
+	}
+	return 0;
+}
+
+unsigned int _stdcall IOCPBase::workthread(PVOID pVoid)
 {
 	ULONG_PTR key;
 	PSock_Buf pBuf;
@@ -457,7 +496,7 @@ BOOL IOCPBase::postZeroRecv(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 
 	if (SOCKET_ERROR == WSARecv(_pSock_Handle->s, _pSock_Handle->wsabuf, 2, &dwBytes, &dwFlags, &_pBuf->ol, NULL))
 	{
-		if (WSA_IO_PENDING == WSAGetLastError())
+		if (WSA_IO_PENDING != WSAGetLastError())
 		{
 			log_printf(_T("向客户发送数据失败（0字节）:%d"), WSAGetLastError());
 			return FALSE;
@@ -509,7 +548,7 @@ BOOL IOCPBase::postRecv(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 
 	if (SOCKET_ERROR == WSARecv(_pSock_Handle->s, _pSock_Handle->wsabuf, 2, &dwBytes, &dwFlags, &_pBuf->ol, NULL))
 	{
-		if (WSA_IO_PENDING == WSAGetLastError())
+		if (WSA_IO_PENDING != WSAGetLastError())
 		{
 			log_printf(_T("接收户发送的数据失败:%d"), WSAGetLastError());
 			return FALSE;
@@ -532,7 +571,7 @@ void IOCPBase::RecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 	while (len)
 	{
 		PSock_Buf workBuf = new Sock_Buf;
-		workBuf->Init(123456);
+		workBuf->Init(m_dwPagesize * 8 - SOCK_BUF_T_SIZE);
 		pSock_Handle->Read(workBuf->data, len);
 		workBuf->dwRecvedCount = len;
 		workBuf->pRelateSockHandle = pSock_Handle;
@@ -586,7 +625,7 @@ BOOL IOCPBase::postSend(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 
 	if (SOCKET_ERROR == WSASend(_pSock_Handle->s, &_pBuf->wsaBuf, 1, &dwBytes, 0, &_pBuf->ol, NULL))
 	{
-		if (WSA_IO_PENDING == WSAGetLastError())
+		if (WSA_IO_PENDING != WSAGetLastError())
 		{
 			log_printf(_T("向客户发送数据失败:%d"), WSAGetLastError());
 			return FALSE;
@@ -690,7 +729,20 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 	PSock_Buf pBuf = (PSock_Buf)pBuf_;
 	PSock_Handle pSock_Handle = (PSock_Handle)pBuf->pRelateSockHandle;
 
-	// do something
+	msgpack::unpacker upk;
+	upk.reserve_buffer(pBuf->dwRecvedCount - 2);
+	memcpy_s(upk.buffer(), pBuf->dwRecvedCount - 2, pBuf->data, pBuf->dwRecvedCount - 2);
+	upk.buffer_consumed(pBuf->dwRecvedCount - 2);
+	msgpack::object_handle oh;
+	mystring str;
+	while (upk.next(oh))
+	{
+		str = oh.get().as<mystring>();
+		log_printf(_T("接收到的数据：%s"), str.c_str());
+	}
+
+	_stprintf_s(pBuf->data, pBuf->datalen - 1, _T("RetrunData:%s"), str.c_str());
+	pBuf->dwRecvedCount = _tcslen(pBuf->data);
 
 	if (pSock_Handle->CheckSend(pBuf))
 	{

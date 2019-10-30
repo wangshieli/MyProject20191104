@@ -5,6 +5,7 @@
 #include <mstcpip.h>
 #include <process.h>
 #include <list>
+#include <msgpack.hpp>
 
 typedef void(*PTIoReqSuccess)(DWORD dwTranstion, void* key, void* buf);
 typedef void(*PTIoReqFailed)(void* key, void* buf);
@@ -12,6 +13,7 @@ typedef void(*PTIoReqFailed)(void* key, void* buf);
 typedef struct st_listen
 {
 	SOCKET sListenSock;
+	HANDLE evtPostAcceptEx;
 }Listen_Handle, *PListen_Handle;
 
 typedef struct sock_buf_t
