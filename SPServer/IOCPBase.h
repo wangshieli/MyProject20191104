@@ -32,6 +32,7 @@ private:
 	static HANDLE m_hIocp;
 	static PListen_Handle m_pListenHandle;
 	static SOCKET m_sockSUnit;
+	static SOCKET m_sockSend;
 	static DWORD m_dwCpunums;
 	static DWORD m_dwPagesize;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -67,6 +68,10 @@ private:
 	static void FD_Read();
 	static void FD_Write();
 	static void FD_Close();
+	static void Fuc_SUnit(DWORD _dwIndex);
+
+	static void Send_PostEventMessage();
+	static void Fuc_Send(DWORD _dwIndex);
 /***************************************************************************************************/
 };
 

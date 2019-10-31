@@ -18,6 +18,13 @@ BYTE csum(unsigned char *addr, int count)
 
 int main()
 {
+	std::string str(_T("123qwezxcasd"));
+	std::cout << str << std::endl;
+	std::cout << str.substr(0, 3) << std::endl;
+	_tsystem(_T("pause"));
+	return 0;
+
+
 	WSADATA _wsadata;
 	if (0 != WSAStartup(MAKEWORD(2, 2), &_wsadata))
 	{

@@ -20,11 +20,22 @@ typedef std::string	mystring;
 
 HANDLE g_evtListen[WSA_MAXIMUM_WAIT_EVENTS];
 DWORD g_nListens = 0;
+
 HANDLE g_evtConnect[WSA_MAXIMUM_WAIT_EVENTS];
 SOCKET g_sockConnect[WSA_MAXIMUM_WAIT_EVENTS];
 DWORD g_nConnects = 0;
+void(*g_fucEvent[WSA_MAXIMUM_WAIT_EVENTS])(DWORD _dwIndex);
 
 HANDLE g_evtWaitSunitThreadOn = INVALID_HANDLE_VALUE;
+
+struct streamInfo
+{
+	mystring senddata;
+	mystring recvdata;
+	DWORD dwSendlen;
+	DWORD dwRecvLen;
+};
+struct streamInfo g_streaminfo;
 
 void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
 {
@@ -47,6 +58,7 @@ LPFN_DISCONNECTEX	IOCPBase::m_pfnConnectEx = NULL;
 HANDLE IOCPBase::m_hIocp = INVALID_HANDLE_VALUE;
 PListen_Handle IOCPBase::m_pListenHandle = NULL;
 SOCKET IOCPBase::m_sockSUnit = INVALID_SOCKET;
+SOCKET IOCPBase::m_sockSend = INVALID_SOCKET;
 DWORD IOCPBase::m_dwCpunums = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
 
@@ -254,14 +266,14 @@ BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(_port);
 	InetPton(AF_INET, _sip, &addr.sin_addr.s_addr);
-
 	if (SOCKET_ERROR == WSAEventSelect(m_sockSUnit, evtSUnit, FD_CONNECT | FD_CLOSE | FD_READ | FD_WRITE))
 	{
 		log_printf(_T("连接SUnit服务失败:%d"), WSAGetLastError());
 		return FALSE;
 	}
 	g_sockConnect[g_nConnects] = m_sockSUnit;
-	g_evtConnect[g_nConnects++] = evtSUnit;
+	g_evtConnect[g_nConnects] = evtSUnit;
+	g_fucEvent[g_nConnects++] = Fuc_SUnit;
 
 	g_evtWaitSunitThreadOn = CreateEvent(NULL, TRUE, FALSE, NULL);
 	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, sunitthread, NULL, 0, NULL);
@@ -279,6 +291,17 @@ BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 			return FALSE;
 		}
 	}
+
+	m_sockSend = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	HANDLE evtSend = WSACreateEvent();
+	if (SOCKET_ERROR == WSAEventSelect(m_sockSend, evtSend, FD_CONNECT | FD_CLOSE | FD_READ | FD_WRITE))
+	{
+		log_printf(_T("连接SUnit服务失败:%d"), WSAGetLastError());
+		return FALSE;
+	}
+	g_sockConnect[g_nConnects] = m_sockSend;
+	g_evtConnect[g_nConnects] = evtSend;
+	g_fucEvent[g_nConnects++] = Fuc_Send;
 
 	return TRUE;
 }
@@ -327,68 +350,15 @@ unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
 		}
 		DWORD dwRealIndex = dwIndex - WSA_WAIT_EVENT_0;
 		// 返回的是触发事件的最小索引，为了确保此索引之后的事件能被及时处理，需要遍历一遍   目前只监听一个事件，先不处理
-		//for (DWORD i = dwRealIndex; i < g_nConnects; i++)
-		//{
-		//	DWORD dwError = WSAWaitForMultipleEvents(1, &g_evtConnect[i], TRUE, 0, FALSE);
-		//	if (WSA_WAIT_TIMEOUT == dwError || WSA_WAIT_FAILED == dwError)
-		//		continue;
-		//}
+		for (DWORD i = dwRealIndex; i < g_nConnects; i++)
+		{
+			DWORD dwError = WSAWaitForMultipleEvents(1, &g_evtConnect[i], TRUE, 0, FALSE);
+			if (WSA_WAIT_TIMEOUT == dwError || WSA_WAIT_FAILED == dwError)
+				continue;
 
-		WSAResetEvent(g_evtConnect[dwRealIndex]);
+			WSAResetEvent(g_evtConnect[i]);
 
-		WSANETWORKEVENTS networkEvents;
-		if (SOCKET_ERROR == WSAEnumNetworkEvents(g_sockConnect[dwRealIndex], g_evtConnect[dwRealIndex], &networkEvents))
-		{
-			log_printf(_T("检测触发事件失败:%d"), WSAGetLastError());
-			continue;
-		}
-		if (networkEvents.lNetworkEvents & FD_READ)
-		{
-			if (networkEvents.iErrorCode[FD_READ_BIT])
-			{
-				log_printf(_T("接收服务器数据失败:%d"), WSAGetLastError());
-				continue;
-			}
-			else
-			{
-				FD_Read();
-			}
-		}
-		else if (networkEvents.lNetworkEvents & FD_WRITE)
-		{
-			if (networkEvents.iErrorCode[FD_WRITE_BIT])
-			{
-				log_printf(_T("向服务器发送数据失败:%d"), WSAGetLastError());
-				continue;
-			}
-			else
-			{
-				FD_Write();
-			}
-		}
-		else if (networkEvents.lNetworkEvents & FD_CONNECT)
-		{
-			if (networkEvents.iErrorCode[FD_CONNECT_BIT])
-			{
-				log_printf(_T("连接服务器失败:%d"), WSAGetLastError());
-				continue;
-			}
-			else // 处理连接
-			{
-				FD_Connect();
-			}
-		}
-		else/* if (networkEvents.lNetworkEvents & FD_CLOSE)*/
-		{
-			if (networkEvents.iErrorCode[FD_CLOSE_BIT])
-			{
-				log_printf(_T("关闭服务器连接失败:%d"), WSAGetLastError());
-				continue;
-			}
-			else
-			{
-				FD_Close();
-			}
+			g_fucEvent[i](i);
 		}
 	}
 	return 0;
@@ -879,6 +849,8 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 	_stprintf_s(pBuf->data, pBuf->datalen - 1, _T("RetrunData:%s"), str.c_str());
 	pBuf->dwRecvedCount = _tcslen(pBuf->data);
 
+	//Send_PostEventMessage();
+
 	if (pSock_Handle->CheckSend(pBuf))
 	{
 		pBuf->pfnFailed = SendFaile;
@@ -924,6 +896,7 @@ void IOCPBase::FD_Read()
 	TCHAR buf[1024] = { 0 };
 	recv(m_sockSUnit, buf, 1024, 0);
 	log_printf(_T("%s"), buf);
+	//PostQueuedCompletionStatus(m_hIocp, 0, NULL, NULL);
 }
 
 void IOCPBase::FD_Write()
@@ -943,4 +916,81 @@ void IOCPBase::FD_Write()
 void IOCPBase::FD_Close()
 {
 	log_printf(_T("FD_Close"));
+}
+
+void IOCPBase::Fuc_SUnit(DWORD _dwIndex)
+{
+	WSANETWORKEVENTS networkEvents;
+	if (SOCKET_ERROR == WSAEnumNetworkEvents(g_sockConnect[_dwIndex], g_evtConnect[_dwIndex], &networkEvents))
+	{
+		log_printf(_T("检测触发事件失败:%d"), WSAGetLastError());
+		return;
+	}
+	if (networkEvents.lNetworkEvents & FD_READ)
+	{
+		if (networkEvents.iErrorCode[FD_READ_BIT])
+		{
+			log_printf(_T("接收服务器数据失败:%d"), WSAGetLastError());
+			return;
+		}
+		else
+		{
+			FD_Read();
+		}
+	}
+	else if (networkEvents.lNetworkEvents & FD_WRITE)
+	{
+		if (networkEvents.iErrorCode[FD_WRITE_BIT])
+		{
+			log_printf(_T("向服务器发送数据失败:%d"), WSAGetLastError());
+			return;
+		}
+		else
+		{
+			FD_Write();
+		}
+	}
+	else if (networkEvents.lNetworkEvents & FD_CONNECT)
+	{
+		if (networkEvents.iErrorCode[FD_CONNECT_BIT])
+		{
+			log_printf(_T("连接服务器失败:%d"), WSAGetLastError());
+			return;
+		}
+		else // 处理连接
+		{
+			FD_Connect();
+		}
+	}
+	else/* if (networkEvents.lNetworkEvents & FD_CLOSE)*/
+	{
+		if (networkEvents.iErrorCode[FD_CLOSE_BIT])
+		{
+			log_printf(_T("关闭服务器连接失败:%d"), WSAGetLastError());
+			return;
+		}
+		else
+		{
+			FD_Close();
+		}
+	}
+}
+
+void IOCPBase::Send_PostEventMessage()
+{
+	
+}
+
+void IOCPBase::Fuc_Send(DWORD _dwIndex)
+{
+	log_printf(_T("Fuc_Send"));
+	const TCHAR* psend = _T("TEST");
+	if (SOCKET_ERROR == send(m_sockSUnit, psend, _tcslen(psend), 0))
+	{
+		if (WSAEWOULDBLOCK != WSAGetLastError())
+		{
+			log_printf(_T("发送数据失败:%d"), WSAGetLastError());
+			return;
+		}
+	}
 }
