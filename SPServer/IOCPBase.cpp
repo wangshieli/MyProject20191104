@@ -24,6 +24,8 @@ HANDLE g_evtConnect[WSA_MAXIMUM_WAIT_EVENTS];
 SOCKET g_sockConnect[WSA_MAXIMUM_WAIT_EVENTS];
 DWORD g_nConnects = 0;
 
+HANDLE g_evtWaitSunitThreadOn = INVALID_HANDLE_VALUE;
+
 void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
 {
 	mystring _temp(_T("%s_%s_%d:"));
@@ -237,18 +239,23 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 	return FALSE;
 }
 
-BOOL IOCPBase::InitSUnit(TCHAR* _sip, USHORT _port)
+BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 {
 	HANDLE evtSUnit = WSACreateEvent();
 
 	m_sockSUnit = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	//unsigned long ul = 1;
+	//if (SOCKET_ERROR == ioctlsocket(m_sockSUnit, FIONBIO, (unsigned long*)&ul))
+	//{
+	//	log_printf(_T("设置非阻塞失败:%d"), WSAGetLastError());
+	//}
 	struct sockaddr_in addr;
 	memset(&addr, 0x00, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(_port);
 	InetPton(AF_INET, _sip, &addr.sin_addr.s_addr);
 
-	if (SOCKET_ERROR == WSAEventSelect(m_sockSUnit, evtSUnit,  FD_CONNECT | FD_READ | FD_WRITE | FD_CLOSE))
+	if (SOCKET_ERROR == WSAEventSelect(m_sockSUnit, evtSUnit, FD_CONNECT | FD_CLOSE | FD_READ | FD_WRITE))
 	{
 		log_printf(_T("连接SUnit服务失败:%d"), WSAGetLastError());
 		return FALSE;
@@ -256,7 +263,23 @@ BOOL IOCPBase::InitSUnit(TCHAR* _sip, USHORT _port)
 	g_sockConnect[g_nConnects] = m_sockSUnit;
 	g_evtConnect[g_nConnects++] = evtSUnit;
 
-	connect(m_sockSUnit, (const sockaddr*)&addr, sizeof(addr));
+	g_evtWaitSunitThreadOn = CreateEvent(NULL, TRUE, FALSE, NULL);
+	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, sunitthread, NULL, 0, NULL);
+	if (WAIT_OBJECT_0 != WaitForSingleObject(g_evtWaitSunitThreadOn, 5000))
+	{
+		log_printf(_T("初始化SUnit失:%d"), GetLastError());
+		return FALSE;
+	}
+
+	if (SOCKET_ERROR == connect(m_sockSUnit, (const sockaddr*)&addr, sizeof(addr)))
+	{
+		if (WSAEWOULDBLOCK != WSAGetLastError())
+		{
+			log_printf(_T("连接服务器失败:%d"), WSAGetLastError());
+			return FALSE;
+		}
+	}
+
 	return TRUE;
 }
 
@@ -272,6 +295,9 @@ BOOL IOCPBase::GetCpuNumsAndPagesize()
 
 BOOL IOCPBase::StartServer()
 {
+	//192.168.24.104 6666
+	InitSUnit(_T("192.168.24.104"), 6666);
+
 	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, toolthread, NULL, 0, NULL);
 
 	DWORD _dwThreadCounts = m_dwCpunums * 2 + 2;
@@ -290,6 +316,7 @@ BOOL IOCPBase::StartServer()
 
 unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
 {
+	SetEvent(g_evtWaitSunitThreadOn);
 	while (true)
 	{
 		DWORD dwIndex = WSAWaitForMultipleEvents(g_nConnects, g_evtConnect, FALSE, INFINITE, FALSE);
@@ -299,6 +326,15 @@ unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
 			return 0;
 		}
 		DWORD dwRealIndex = dwIndex - WSA_WAIT_EVENT_0;
+		// 返回的是触发事件的最小索引，为了确保此索引之后的事件能被及时处理，需要遍历一遍   目前只监听一个事件，先不处理
+		//for (DWORD i = dwRealIndex; i < g_nConnects; i++)
+		//{
+		//	DWORD dwError = WSAWaitForMultipleEvents(1, &g_evtConnect[i], TRUE, 0, FALSE);
+		//	if (WSA_WAIT_TIMEOUT == dwError || WSA_WAIT_FAILED == dwError)
+		//		continue;
+		//}
+
+		WSAResetEvent(g_evtConnect[dwRealIndex]);
 
 		WSANETWORKEVENTS networkEvents;
 		if (SOCKET_ERROR == WSAEnumNetworkEvents(g_sockConnect[dwRealIndex], g_evtConnect[dwRealIndex], &networkEvents))
@@ -306,49 +342,52 @@ unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
 			log_printf(_T("检测触发事件失败:%d"), WSAGetLastError());
 			continue;
 		}
-		if (networkEvents.lNetworkEvents & FD_CONNECT)
-		{
-			if (networkEvents.iErrorCode[FD_CONNECT_BIT])
-			{
-				log_printf(_T("检测触发事件失败:%d"), WSAGetLastError());
-				continue;
-			}
-			else // 处理连接
-			{
-
-			}
-		}
-		else if (networkEvents.lNetworkEvents & FD_READ)
+		if (networkEvents.lNetworkEvents & FD_READ)
 		{
 			if (networkEvents.iErrorCode[FD_READ_BIT])
 			{
-
+				log_printf(_T("接收服务器数据失败:%d"), WSAGetLastError());
+				continue;
 			}
 			else
 			{
-
+				FD_Read();
 			}
 		}
 		else if (networkEvents.lNetworkEvents & FD_WRITE)
 		{
 			if (networkEvents.iErrorCode[FD_WRITE_BIT])
 			{
-
+				log_printf(_T("向服务器发送数据失败:%d"), WSAGetLastError());
+				continue;
 			}
 			else
 			{
-
+				FD_Write();
 			}
 		}
-		else if (networkEvents.lNetworkEvents & FD_CLOSE)
+		else if (networkEvents.lNetworkEvents & FD_CONNECT)
+		{
+			if (networkEvents.iErrorCode[FD_CONNECT_BIT])
+			{
+				log_printf(_T("连接服务器失败:%d"), WSAGetLastError());
+				continue;
+			}
+			else // 处理连接
+			{
+				FD_Connect();
+			}
+		}
+		else/* if (networkEvents.lNetworkEvents & FD_CLOSE)*/
 		{
 			if (networkEvents.iErrorCode[FD_CLOSE_BIT])
 			{
-
+				log_printf(_T("关闭服务器连接失败:%d"), WSAGetLastError());
+				continue;
 			}
 			else
 			{
-
+				FD_Close();
 			}
 		}
 	}
@@ -872,4 +911,36 @@ void IOCPBase::DoWorkProcessFaile(PVOID _pBuf, PVOID pBuf_)
 		}
 	}
 	free(pBuf);
+}
+
+void IOCPBase::FD_Connect()
+{
+	log_printf(_T("FD_Connect"));
+}
+
+void IOCPBase::FD_Read()
+{
+	log_printf(_T("FD_Read"));
+	TCHAR buf[1024] = { 0 };
+	recv(m_sockSUnit, buf, 1024, 0);
+	log_printf(_T("%s"), buf);
+}
+
+void IOCPBase::FD_Write()
+{
+	log_printf(_T("FD_Write"));
+	const TCHAR* psend = _T("TEST");
+	if (SOCKET_ERROR == send(m_sockSUnit, psend, _tcslen(psend), 0))
+	{
+		if (WSAEWOULDBLOCK != WSAGetLastError())
+		{
+			log_printf(_T("发送数据失败:%d"), WSAGetLastError());
+			return;
+		}
+	}
+}
+
+void IOCPBase::FD_Close()
+{
+	log_printf(_T("FD_Close"));
 }
