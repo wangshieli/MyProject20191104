@@ -12,14 +12,18 @@ public:
 	BOOL isEmpty();
 	void empty();
 	DWORD writeData(TCHAR* _buf, DWORD _dwbufsize);
-	DWORD readData(TCHAR* _buf, DWORD _dwCount);
-	int getStart()
+	DWORD readData(SOCKET s);
+	DWORD getStart()
 	{
 		return dwReadPos;
 	}
-	int getEnd()
+	DWORD getEnd()
 	{
 		return dwWritePos;
+	}
+	DWORD GetLength()
+	{
+
 	}
 
 private:

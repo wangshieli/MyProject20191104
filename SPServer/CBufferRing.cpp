@@ -116,23 +116,67 @@ DWORD CBufferRing::writeData(TCHAR * _data, DWORD _datalen)
 	return 0;
 }
 
-DWORD CBufferRing::readData(TCHAR * _buf, DWORD _dwCount)
+DWORD CBufferRing::readData(SOCKET s)
 {
-	bFull = FALSE;
 	if (bEempty)
 		return 0;
 
-	if (dwReadPos == dwWritePos)
+	bFull = false; // 状态需要在有数据发送了之后设为false？？？
+	if (dwReadPos < dwWritePos)
 	{
-
+		DWORD datelen = dwWritePos - dwReadPos;
+		//memcpy(_buf, buf + dwReadPos, _dwCount);
+		int nSendBytes = send(s, buf + dwReadPos, datelen, 0);
+		if (SOCKET_ERROR == nSendBytes)
+		{
+			if (WSAEWOULDBLOCK != WSAGetLastError())
+			{
+				// 错误处理
+			}
+		}
+		//dwReadPos += _dwCount;
+		dwReadPos += nSendBytes;
+		bEempty = (dwReadPos == dwWritePos);
+		return nSendBytes;
 	}
-	else if (dwReadPos < dwWritePos)
+	else if (dwReadPos >= dwWritePos)
 	{
+		DWORD datalen = dwBufSize - (dwReadPos - dwWritePos);
+		TCHAR* sendbuf = (TCHAR*)malloc(datalen);
+		if (1)
+		{
 
-	}
-	else /*if (dwReadPos > dwWritePos)*/
-	{
-		
+		}
+		else
+		{
+
+		}
+
+		//DWORD leftcount = dwBufSize - dwReadPos;
+		//if (leftcount > _dwCount)
+		//{
+		//	//memcpy(_buf, buf + dwReadPos, _dwCount);
+		//	int nSendBytes = send(s, buf + dwReadPos, _dwCount, 0);
+		//	if (SOCKET_ERROR == nSendBytes)
+		//	{
+		//		if (WSAEWOULDBLOCK != WSAGetLastError())
+		//		{
+		//			// 错误处理
+		//		}
+		//	}
+		//	dwReadPos += nSendBytes;
+		//	//dwReadPos += _dwCount;
+		//	bEempty = (dwReadPos == dwWritePos);
+		//	return _dwCount;
+		//}
+		//else
+		//{
+		//	memcpy(_buf, buf + dwReadPos, leftcount);
+		//	dwReadPos = (dwWritePos >= (_dwCount - leftcount) ? (_dwCount - leftcount) : dwWritePos);
+		//	memcpy(_buf + leftcount, buf, dwReadPos);
+		//	bEempty = (dwReadPos == dwWritePos);
+		//	return leftcount + dwReadPos;
+		//}
 	}
 	return 0;
 }
