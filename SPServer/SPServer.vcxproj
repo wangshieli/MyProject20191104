@@ -152,11 +152,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CBufferRing.h" />
     <ClInclude Include="IOCPBase.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="singledata.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CBufferRing.cpp" />
     <ClCompile Include="IOCPBase.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

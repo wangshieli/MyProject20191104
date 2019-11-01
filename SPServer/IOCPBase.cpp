@@ -54,6 +54,7 @@ PSock_Handle IOCPBase::m_pSUnitHandle = NULL;
 SOCKET IOCPBase::m_sockSend = INVALID_SOCKET;
 DWORD IOCPBase::m_dwCpunums = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
+CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing(IOCPBase::m_dwPagesize * 32);
 
 IOCPBase::IOCPBase(): m_hUniqueInstance(INVALID_HANDLE_VALUE)
 	//, m_pfnAcceptEx(NULL)
@@ -995,7 +996,7 @@ void IOCPBase::Fuc_SUnit(DWORD _dwIndex)
 	}
 }
 
-void IOCPBase::Send_PostEventMessage()
+void IOCPBase::Send_PostEventMessage(TCHAR* _buf, DWORD _bufsize)
 {
 	WSASetEvent(g_evtSend);
 }

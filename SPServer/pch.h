@@ -10,6 +10,14 @@
 #define PCH_H
 
 // TODO: 添加要在此处预编译的标头
+
 #include <tchar.h>
+#include <WinSock2.h>
+#include <MSWSock.h>
+#include <WS2tcpip.h>
+#include <mstcpip.h>
+#include <process.h>
+#include <list>
+#include <msgpack.hpp>
 
 #endif //PCH_H

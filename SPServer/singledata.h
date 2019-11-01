@@ -1,11 +1,4 @@
 #pragma once
-#include <WinSock2.h>
-#include <MSWSock.h>
-#include <WS2tcpip.h>
-#include <mstcpip.h>
-#include <process.h>
-#include <list>
-#include <msgpack.hpp>
 
 typedef void(*PTIoReqSuccess)(DWORD dwTranstion, void* key, void* buf);
 typedef void(*PTIoReqFailed)(void* key, void* buf);

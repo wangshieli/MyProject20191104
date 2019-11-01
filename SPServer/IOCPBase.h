@@ -1,5 +1,6 @@
 #pragma once
 #include "singledata.h"
+#include "CBufferRing.h"
 
 #define LISTEN_PORT		6086
 
@@ -70,8 +71,11 @@ private:
 	static void FD_Close();
 	static void Fuc_SUnit(DWORD _dwIndex);
 
-	static void Send_PostEventMessage();
+	static void Send_PostEventMessage(TCHAR* _buf, DWORD _bufsize);
 	static void Fuc_Send(DWORD _dwIndex);
+
+private:
+	static CBufferRing* m_pCBufRing;
 /***************************************************************************************************/
 };
 
