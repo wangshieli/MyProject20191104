@@ -2,10 +2,11 @@
 class CBufferRing
 {
 public:
-	CBufferRing(DWORD _bufsize);
+	CBufferRing();
 	~CBufferRing();
 
 public:
+	void Init(DWORD _bufsize);
 	void lock();
 	void unlock();
 	BOOL isFull();
@@ -31,7 +32,7 @@ private:
 	DWORD dwBufSize;
 	DWORD dwWritePos;
 	DWORD dwReadPos;
-	BOOL bEempty;
+	BOOL bEmpty;
 	BOOL bFull;
 	CRITICAL_SECTION cs;
 };

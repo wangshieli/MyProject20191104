@@ -50,10 +50,10 @@ int main()
 	memcpy(pData + 2, &nLen5, 4);
 	nLen5 += 8;
 
-	for (int i = 0; i < 99999999; i++)
+	for (int i = 0; i < 1; i++)
 	{
 		send(sock, sbuf5.data(), sbuf5.size(), 0);
-		std::cout << WSAGetLastError() << std::endl;
+//		std::cout << WSAGetLastError() << std::endl;
 
 		char rBuf[1024] = { 0 };
 		recv(sock, rBuf, 1024, 0);

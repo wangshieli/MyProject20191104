@@ -54,7 +54,7 @@ PSock_Handle IOCPBase::m_pSUnitHandle = NULL;
 SOCKET IOCPBase::m_sockSend = INVALID_SOCKET;
 DWORD IOCPBase::m_dwCpunums = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
-CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing(IOCPBase::m_dwPagesize * PAGE_NUMS * 4);
+CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing();
 
 IOCPBase::IOCPBase(): m_hUniqueInstance(INVALID_HANDLE_VALUE)
 	//, m_pfnAcceptEx(NULL)
@@ -247,6 +247,7 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 
 BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 {
+	m_pCBufRing->Init(m_dwPagesize * PAGE_NUMS * 2);
 	HANDLE evtSUnit = WSACreateEvent();
 	m_pSUnitHandle = (PSock_Handle)malloc(m_dwPagesize * PAGE_NUMS);
 	if (NULL == m_pSUnitHandle)
@@ -269,7 +270,7 @@ BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(_port);
 	InetPton(AF_INET, _sip, &addr.sin_addr.s_addr);
-	if (SOCKET_ERROR == connect(m_pSUnitHandle->s, (const sockaddr*)&addr, sizeof(addr)))
+	if (SOCKET_ERROR == connect(m_pSUnitHandle->s, (const sockaddr*)&addr, sizeof(addr))) // 如果服务器没打开会卡着
 	{
 		if (WSAEWOULDBLOCK != WSAGetLastError())
 		{
@@ -377,6 +378,7 @@ unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
 			if (WSA_WAIT_TIMEOUT == dwError || WSA_WAIT_FAILED == dwError)
 				continue;
 
+			log_printf(_T("index = %d"), i);
 			WSAResetEvent(g_evtConnect[i]);
 
 			g_fucEvent[i](i);
@@ -694,7 +696,7 @@ void IOCPBase::RecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 	
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
-	log_printf(_T("ZeroRecvSuccess:%d"), _dwTranstion);
+	log_printf(_T("RecvSuccess:%d"), _dwTranstion);
 
 	pSock_Handle->InitWRpos(_dwTranstion);
 	DWORD len = pSock_Handle->GetCmdDataLength();
@@ -877,7 +879,7 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 	pBuf->dwRecvedCount = _tcslen(pBuf->data);
 	log_printf(_T("接收完成"));
 
-	//Send_PostEventMessage();
+	Send_PostEventMessage(pBuf->data, pBuf->dwRecvedCount);
 
 	if (pSock_Handle->CheckSend(pBuf))
 	{
@@ -931,7 +933,8 @@ void IOCPBase::FD_Read()
 
 void IOCPBase::FD_Write()
 {
-	log_printf(_T("FD_Write"));
+	m_pCBufRing->readData(m_pSUnitHandle->s);
+	/*log_printf(_T("FD_Write"));
 	const TCHAR* psend = _T("TEST");
 	if (SOCKET_ERROR == send(m_pSUnitHandle->s, psend, _tcslen(psend), 0))
 	{
@@ -940,7 +943,7 @@ void IOCPBase::FD_Write()
 			log_printf(_T("发送数据失败:%d"), WSAGetLastError());
 			return;
 		}
-	}
+	}*/
 }
 
 void IOCPBase::FD_Close()
@@ -1008,6 +1011,7 @@ void IOCPBase::Fuc_SUnit(DWORD _dwIndex)
 
 void IOCPBase::Send_PostEventMessage(TCHAR* _buf, DWORD _bufsize)
 {
+	log_printf(_T("Send_PostEventMessage"));
 	m_pCBufRing->writeData(_buf, _bufsize);
 	WSASetEvent(g_evtSend);
 }
@@ -1015,6 +1019,8 @@ void IOCPBase::Send_PostEventMessage(TCHAR* _buf, DWORD _bufsize)
 void IOCPBase::Fuc_Send(DWORD _dwIndex)
 {
 	log_printf(_T("Fuc_Send"));
+	m_pCBufRing->readData(m_pSUnitHandle->s);
+	/*log_printf(_T("Fuc_Send"));
 	const TCHAR* psend = _T("TEST");
 	if (SOCKET_ERROR == send(m_pSUnitHandle->s, psend, _tcslen(psend), 0))
 	{
@@ -1023,5 +1029,5 @@ void IOCPBase::Fuc_Send(DWORD _dwIndex)
 			log_printf(_T("发送数据失败:%d"), WSAGetLastError());
 			return;
 		}
-	}
+	}*/
 }
