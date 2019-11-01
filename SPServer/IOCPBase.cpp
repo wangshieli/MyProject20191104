@@ -30,15 +30,6 @@ HANDLE g_evtWaitSunitThreadOn = INVALID_HANDLE_VALUE;
 
 HANDLE g_evtSend = INVALID_HANDLE_VALUE;
 
-struct streamInfo
-{
-	mystring senddata;
-	mystring recvdata;
-	DWORD dwSendlen;
-	DWORD dwRecvLen;
-};
-struct streamInfo g_streaminfo;
-
 void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
 {
 	mystring _temp(_T("%s_%s_%d:"));
