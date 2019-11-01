@@ -31,7 +31,7 @@ private:
 	static LPFN_DISCONNECTEX	m_pfnConnectEx;
 	static HANDLE m_hIocp;
 	static PListen_Handle m_pListenHandle;
-	static SOCKET m_sockSUnit;
+	static PSock_Handle m_pSUnitHandle;
 	static SOCKET m_sockSend;
 	static DWORD m_dwCpunums;
 	static DWORD m_dwPagesize;

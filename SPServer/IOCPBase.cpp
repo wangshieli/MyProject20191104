@@ -28,6 +28,8 @@ void(*g_fucEvent[WSA_MAXIMUM_WAIT_EVENTS])(DWORD _dwIndex);
 
 HANDLE g_evtWaitSunitThreadOn = INVALID_HANDLE_VALUE;
 
+HANDLE g_evtSend = INVALID_HANDLE_VALUE;
+
 struct streamInfo
 {
 	mystring senddata;
@@ -57,7 +59,7 @@ LPFN_GETACCEPTEXSOCKADDRS	IOCPBase::m_pfnAcceptExSockaddrs = NULL;
 LPFN_DISCONNECTEX	IOCPBase::m_pfnConnectEx = NULL;
 HANDLE IOCPBase::m_hIocp = INVALID_HANDLE_VALUE;
 PListen_Handle IOCPBase::m_pListenHandle = NULL;
-SOCKET IOCPBase::m_sockSUnit = INVALID_SOCKET;
+PSock_Handle IOCPBase::m_pSUnitHandle = NULL;
 SOCKET IOCPBase::m_sockSend = INVALID_SOCKET;
 DWORD IOCPBase::m_dwCpunums = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
@@ -208,7 +210,7 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 
 		m_pListenHandle->sListenSock = INVALID_SOCKET;
 
-		m_pListenHandle->sListenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+		m_pListenHandle->sListenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (INVALID_SOCKET == m_pListenHandle->sListenSock)
 		{
 			log_printf(_T("初始化监听端口失败:%d"), WSAGetLastError());
@@ -254,36 +256,28 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 {
 	HANDLE evtSUnit = WSACreateEvent();
+	m_pSUnitHandle = (PSock_Handle)malloc(m_dwPagesize * 8);
+	if (NULL == m_pSUnitHandle)
+	{
+		log_printf(_T("InitSUnit失败:%d"), WSAGetLastError());
+		return FALSE;
+	}
+	InitializeCriticalSection(&m_pSUnitHandle->cs);
+	m_pSUnitHandle->lstSend = new std::list<PSock_Buf>;
+	if (NULL == m_pSUnitHandle->lstSend)
+	{
+		log_printf(_T("InitSUnit失败:%d"), WSAGetLastError());
+		return FALSE;
+	}
+	m_pSUnitHandle->Init(m_dwPagesize * 8 - SOCK_HANDLE_T_SIZE);
 
-	m_sockSUnit = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	//unsigned long ul = 1;
-	//if (SOCKET_ERROR == ioctlsocket(m_sockSUnit, FIONBIO, (unsigned long*)&ul))
-	//{
-	//	log_printf(_T("设置非阻塞失败:%d"), WSAGetLastError());
-	//}
+	m_pSUnitHandle->s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	struct sockaddr_in addr;
 	memset(&addr, 0x00, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(_port);
 	InetPton(AF_INET, _sip, &addr.sin_addr.s_addr);
-	if (SOCKET_ERROR == WSAEventSelect(m_sockSUnit, evtSUnit, FD_CONNECT | FD_CLOSE | FD_READ | FD_WRITE))
-	{
-		log_printf(_T("连接SUnit服务失败:%d"), WSAGetLastError());
-		return FALSE;
-	}
-	g_sockConnect[g_nConnects] = m_sockSUnit;
-	g_evtConnect[g_nConnects] = evtSUnit;
-	g_fucEvent[g_nConnects++] = Fuc_SUnit;
-
-	g_evtWaitSunitThreadOn = CreateEvent(NULL, TRUE, FALSE, NULL);
-	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, sunitthread, NULL, 0, NULL);
-	if (WAIT_OBJECT_0 != WaitForSingleObject(g_evtWaitSunitThreadOn, 5000))
-	{
-		log_printf(_T("初始化SUnit失:%d"), GetLastError());
-		return FALSE;
-	}
-
-	if (SOCKET_ERROR == connect(m_sockSUnit, (const sockaddr*)&addr, sizeof(addr)))
+	if (SOCKET_ERROR == connect(m_pSUnitHandle->s, (const sockaddr*)&addr, sizeof(addr)))
 	{
 		if (WSAEWOULDBLOCK != WSAGetLastError())
 		{
@@ -292,15 +286,50 @@ BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 		}
 	}
 
+	if (NULL == CreateIoCompletionPort((HANDLE)m_pSUnitHandle->s, m_hIocp, (ULONG_PTR)m_pSUnitHandle, 0))
+	{
+		log_printf(_T("初始化监听端口失败:%d"), WSAGetLastError());
+		return FALSE;
+	}
+
+	if (SOCKET_ERROR == WSAEventSelect(m_pSUnitHandle->s, evtSUnit, FD_WRITE))
+	{
+		log_printf(_T("连接SUnit服务失败:%d"), WSAGetLastError());
+		return FALSE;
+	}
+	g_sockConnect[g_nConnects] = m_pSUnitHandle->s;
+	g_evtConnect[g_nConnects] = evtSUnit;
+	g_fucEvent[g_nConnects++] = Fuc_SUnit;
+
+	PSock_Buf pBuf = (PSock_Buf)malloc(m_dwPagesize * 8);
+	pBuf->Init(m_dwPagesize * 8 - SOCK_BUF_T_SIZE);
+	if (!postZeroRecv(m_pSUnitHandle, pBuf))
+	{
+		if (0 == InterlockedDecrement(&m_pSUnitHandle->nRef))
+		{
+			ClearSingleData(m_pSUnitHandle, pBuf);
+			return FALSE;
+		}
+		free(pBuf);
+	}
+	
+	g_evtWaitSunitThreadOn = CreateEvent(NULL, TRUE, FALSE, NULL);
+	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, sunitthread, NULL, 0, NULL);
+	if (WAIT_OBJECT_0 != WaitForSingleObject(g_evtWaitSunitThreadOn, 5000))
+	{
+		log_printf(_T("初始化SUnit失:%d"), GetLastError());
+		return FALSE;
+	}
+
 	m_sockSend = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	HANDLE evtSend = WSACreateEvent();
-	if (SOCKET_ERROR == WSAEventSelect(m_sockSend, evtSend, FD_CONNECT | FD_CLOSE | FD_READ | FD_WRITE))
+	g_evtSend = WSACreateEvent();
+	if (SOCKET_ERROR == WSAEventSelect(m_sockSend, g_evtSend, FD_CLOSE | FD_WRITE))
 	{
 		log_printf(_T("连接SUnit服务失败:%d"), WSAGetLastError());
 		return FALSE;
 	}
 	g_sockConnect[g_nConnects] = m_sockSend;
-	g_evtConnect[g_nConnects] = evtSend;
+	g_evtConnect[g_nConnects] = g_evtSend;
 	g_fucEvent[g_nConnects++] = Fuc_Send;
 
 	return TRUE;
@@ -545,8 +574,6 @@ void IOCPBase::AcceptExSuccess(DWORD _dwTranstion, PVOID _pListen_Handle, PVOID 
 		len = pSock_Handle->GetCmdDataLength();
 	}
 
-	pBuf->pfnFailed = ZeroRecvFaile;
-	pBuf->pfnSuccess = ZeroRecvSuccess;
 	if (!postZeroRecv(pSock_Handle, pBuf))
 	{
 		if (0 == InterlockedDecrement(&pSock_Handle->nRef))
@@ -603,7 +630,7 @@ BOOL IOCPBase::postZeroRecv(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 	{
 		if (WSA_IO_PENDING != WSAGetLastError())
 		{
-			log_printf(_T("向客户发送数据失败（0字节）:%d"), WSAGetLastError());
+			log_printf(_T("接收客户端送数据失败（0字节）:%d"), WSAGetLastError());
 			return FALSE;
 		}
 	}
@@ -616,8 +643,10 @@ void IOCPBase::ZeroRecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _p
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
 
-	pBuf->pfnFailed = RecvFaile;
-	pBuf->pfnSuccess = RecvSuccess;
+	//char buf[1024] = { 0 };
+	//recv(pSock_Handle->s, buf, 1024, 0);
+	//log_printf(_T("ZeroRecvSuccess:%s"), buf);
+
 	if (!postRecv(pSock_Handle, pBuf))
 	{
 		if (0 == InterlockedDecrement(&pSock_Handle->nRef))
@@ -631,6 +660,7 @@ void IOCPBase::ZeroRecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _p
 
 void IOCPBase::ZeroRecvFaile(PVOID _pSock_Handle, PVOID _pBuf)
 {
+	log_printf(_T("ZeroRecvFaile"));
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
 	if (0 == InterlockedDecrement(&pSock_Handle->nRef))
@@ -651,7 +681,8 @@ BOOL IOCPBase::postRecv(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 	_pBuf->pfnFailed = RecvFaile;
 	_pBuf->pfnSuccess = RecvSuccess;
 
-	if (SOCKET_ERROR == WSARecv(_pSock_Handle->s, _pSock_Handle->wsabuf, 2, &dwBytes, &dwFlags, &_pBuf->ol, NULL))
+	int r = WSARecv(_pSock_Handle->s, _pSock_Handle->wsabuf, 2, &dwBytes, &dwFlags, &_pBuf->ol, NULL);
+	if (SOCKET_ERROR == r)
 	{
 		if (WSA_IO_PENDING != WSAGetLastError())
 		{
@@ -681,8 +712,8 @@ void IOCPBase::RecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 		workBuf->dwRecvedCount = len;
 		workBuf->pRelateSockHandle = pSock_Handle;
 		pSock_Handle->AddRef();
-		workBuf->pfnFailed = NULL;	// 处理业务的过程
-		workBuf->pfnSuccess = NULL;
+		workBuf->pfnFailed = DoWorkProcessFaile;	// 处理业务的过程
+		workBuf->pfnSuccess = DoWorkProcessSuccess;
 		if (!PostQueuedCompletionStatus(m_hIocp, len, (ULONG_PTR)workBuf, &workBuf->ol))
 		{
 			log_printf(_T("业务投递错误:%d"), WSAGetLastError());
@@ -692,8 +723,6 @@ void IOCPBase::RecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 		len = pSock_Handle->GetCmdDataLength();
 	}
 
-	pBuf->pfnFailed = ZeroRecvFaile;
-	pBuf->pfnSuccess = ZeroRecvSuccess;
 	if (!postZeroRecv(pSock_Handle, pBuf))
 	{
 		if (0 == InterlockedDecrement(&pSock_Handle->nRef))
@@ -708,6 +737,7 @@ void IOCPBase::RecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 
 void IOCPBase::RecvFaile(PVOID _pSock_Handle, PVOID _pBuf)
 {
+	log_printf(_T("RecvFaile"));
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
 	if (0 == InterlockedDecrement(&pSock_Handle->nRef))
@@ -853,8 +883,6 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 
 	if (pSock_Handle->CheckSend(pBuf))
 	{
-		pBuf->pfnFailed = SendFaile;
-		pBuf->pfnSuccess = SendSuccess;
 		if (!postSend(pSock_Handle, pBuf))
 		{
 			return SendFaile(pSock_Handle, pBuf);
@@ -894,7 +922,7 @@ void IOCPBase::FD_Read()
 {
 	log_printf(_T("FD_Read"));
 	TCHAR buf[1024] = { 0 };
-	recv(m_sockSUnit, buf, 1024, 0);
+	recv(m_pSUnitHandle->s, buf, 1024, 0);
 	log_printf(_T("%s"), buf);
 	//PostQueuedCompletionStatus(m_hIocp, 0, NULL, NULL);
 }
@@ -903,7 +931,7 @@ void IOCPBase::FD_Write()
 {
 	log_printf(_T("FD_Write"));
 	const TCHAR* psend = _T("TEST");
-	if (SOCKET_ERROR == send(m_sockSUnit, psend, _tcslen(psend), 0))
+	if (SOCKET_ERROR == send(m_pSUnitHandle->s, psend, _tcslen(psend), 0))
 	{
 		if (WSAEWOULDBLOCK != WSAGetLastError())
 		{
@@ -978,14 +1006,14 @@ void IOCPBase::Fuc_SUnit(DWORD _dwIndex)
 
 void IOCPBase::Send_PostEventMessage()
 {
-	
+	WSASetEvent(g_evtSend);
 }
 
 void IOCPBase::Fuc_Send(DWORD _dwIndex)
 {
 	log_printf(_T("Fuc_Send"));
 	const TCHAR* psend = _T("TEST");
-	if (SOCKET_ERROR == send(m_sockSUnit, psend, _tcslen(psend), 0))
+	if (SOCKET_ERROR == send(m_pSUnitHandle->s, psend, _tcslen(psend), 0))
 	{
 		if (WSAEWOULDBLOCK != WSAGetLastError())
 		{

@@ -140,8 +140,8 @@ typedef struct sock_handle
 		InitRLsize();
 		wsabuf[0].buf = buf + dwWritepos;
 		wsabuf[0].len = dwRightsize;
-		wsabuf[0].buf = buf;
-		wsabuf[0].len = dwLeftsize;
+		wsabuf[1].buf = buf;
+		wsabuf[1].len = dwLeftsize;
 	}
 	void InitWRpos(DWORD dwTranstion)
 	{
