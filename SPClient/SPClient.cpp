@@ -18,13 +18,6 @@ BYTE csum(unsigned char *addr, int count)
 
 int main()
 {
-	std::string str(_T("123qwezxcasd"));
-	std::cout << str << std::endl;
-	std::cout << str.substr(0, 3) << std::endl;
-	_tsystem(_T("pause"));
-	return 0;
-
-
 	WSADATA _wsadata;
 	if (0 != WSAStartup(MAKEWORD(2, 2), &_wsadata))
 	{
@@ -45,7 +38,7 @@ int main()
 	msgpack::sbuffer sbuf5;
 	msgpack::packer<msgpack::sbuffer> pk5(&sbuf5);
 	sbuf5.write("\xfb\xfc", 6);
-	pk5.pack("TestData");
+	pk5.pack("TestDssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss555555555544444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444ata");
 	size_t nLen5 = sbuf5.size();
 	unsigned char* pData = (unsigned char*)sbuf5.data();
 	BYTE nSum5 = csum(pData + 6, nLen5 - 6);
@@ -57,12 +50,17 @@ int main()
 	memcpy(pData + 2, &nLen5, 4);
 	nLen5 += 8;
 
-	send(sock, sbuf5.data(), sbuf5.size(), 0);
-	std::cout << WSAGetLastError() << std::endl;
+	for (int i = 0; i < 99999999; i++)
+	{
+		send(sock, sbuf5.data(), sbuf5.size(), 0);
+		std::cout << WSAGetLastError() << std::endl;
 
-	char rBuf[1024] = { 0 };
-	recv(sock, rBuf, 1024, 0);
-	std::cout << rBuf << std::endl;
+		char rBuf[1024] = { 0 };
+		recv(sock, rBuf, 1024, 0);
+		std::cout << i << _T(":") << rBuf << std::endl;
+		//Sleep(1000);
+}
+	
 
 	/*msgpack::unpacker pac5;
 	pac5.reserve_buffer(sbuf5.size());

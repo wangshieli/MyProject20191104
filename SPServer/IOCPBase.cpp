@@ -54,7 +54,7 @@ PSock_Handle IOCPBase::m_pSUnitHandle = NULL;
 SOCKET IOCPBase::m_sockSend = INVALID_SOCKET;
 DWORD IOCPBase::m_dwCpunums = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
-CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing(IOCPBase::m_dwPagesize * 32);
+CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing(IOCPBase::m_dwPagesize * PAGE_NUMS * 4);
 
 IOCPBase::IOCPBase(): m_hUniqueInstance(INVALID_HANDLE_VALUE)
 	//, m_pfnAcceptEx(NULL)
@@ -248,7 +248,7 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 {
 	HANDLE evtSUnit = WSACreateEvent();
-	m_pSUnitHandle = (PSock_Handle)malloc(m_dwPagesize * 8);
+	m_pSUnitHandle = (PSock_Handle)malloc(m_dwPagesize * PAGE_NUMS);
 	if (NULL == m_pSUnitHandle)
 	{
 		log_printf(_T("InitSUnit失败:%d"), WSAGetLastError());
@@ -261,7 +261,7 @@ BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 		log_printf(_T("InitSUnit失败:%d"), WSAGetLastError());
 		return FALSE;
 	}
-	m_pSUnitHandle->Init(m_dwPagesize * 8 - SOCK_HANDLE_T_SIZE);
+	m_pSUnitHandle->Init(m_dwPagesize * PAGE_NUMS - SOCK_HANDLE_T_SIZE);
 
 	m_pSUnitHandle->s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	struct sockaddr_in addr;
@@ -293,8 +293,8 @@ BOOL IOCPBase::InitSUnit(CONST TCHAR* _sip, USHORT _port)
 	g_evtConnect[g_nConnects] = evtSUnit;
 	g_fucEvent[g_nConnects++] = Fuc_SUnit;
 
-	PSock_Buf pBuf = (PSock_Buf)malloc(m_dwPagesize * 8);
-	pBuf->Init(m_dwPagesize * 8 - SOCK_BUF_T_SIZE);
+	PSock_Buf pBuf = (PSock_Buf)malloc(m_dwPagesize * PAGE_NUMS);
+	pBuf->Init(m_dwPagesize * PAGE_NUMS - SOCK_BUF_T_SIZE);
 	if (!postZeroRecv(m_pSUnitHandle, pBuf))
 	{
 		if (0 == InterlockedDecrement(&m_pSUnitHandle->nRef))
@@ -461,8 +461,8 @@ BOOL IOCPBase::postAcceptEx()
 {
 	DWORD dwBytes = 0;
 
-	PSock_Handle _pSock_Handle = (PSock_Handle)malloc(m_dwPagesize * 8);
-	PSock_Buf _pBuf = (PSock_Buf)malloc(m_dwPagesize * 8);
+	PSock_Handle _pSock_Handle = (PSock_Handle)malloc(m_dwPagesize * PAGE_NUMS);
+	PSock_Buf _pBuf = (PSock_Buf)malloc(m_dwPagesize * PAGE_NUMS);
 
 	do
 	{
@@ -478,7 +478,7 @@ BOOL IOCPBase::postAcceptEx()
 			log_printf(_T("AcceptEx失败:%d"), WSAGetLastError());
 			break;
 		}
-		_pSock_Handle->Init(m_dwPagesize * 8 - SOCK_HANDLE_T_SIZE);
+		_pSock_Handle->Init(m_dwPagesize * PAGE_NUMS - SOCK_HANDLE_T_SIZE);
 		_pSock_Handle->s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (SOCKET_ERROR == _pSock_Handle->s)
 		{
@@ -486,7 +486,7 @@ BOOL IOCPBase::postAcceptEx()
 			break;
 		}
 
-		_pBuf->Init(m_dwPagesize * 8 - SOCK_BUF_T_SIZE);
+		_pBuf->Init(m_dwPagesize * PAGE_NUMS - SOCK_BUF_T_SIZE);
 		_pBuf->pRelateSockHandle = _pSock_Handle;
 		_pBuf->pfnSuccess = AcceptExSuccess;
 		_pBuf->pfnFailed = AcceptExFaile;
@@ -549,8 +549,8 @@ void IOCPBase::AcceptExSuccess(DWORD _dwTranstion, PVOID _pListen_Handle, PVOID 
 	DWORD len = pSock_Handle->GetCmdDataLength();
 	while (len)
 	{
-		PSock_Buf workBuf = (PSock_Buf)malloc(m_dwPagesize * 8);
-		workBuf->Init(m_dwPagesize * 8 - SOCK_BUF_T_SIZE);
+		PSock_Buf workBuf = (PSock_Buf)malloc(m_dwPagesize * PAGE_NUMS);
+		workBuf->Init(m_dwPagesize * PAGE_NUMS - SOCK_BUF_T_SIZE);
 		pSock_Handle->Read(workBuf->data, len);
 		workBuf->dwRecvedCount = len;
 		workBuf->pRelateSockHandle = pSock_Handle;
@@ -607,6 +607,7 @@ void IOCPBase::AcceptExFaile(PVOID _pListen_Handle, PVOID _pBuf)
 
 BOOL IOCPBase::postZeroRecv(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 {
+	log_printf(_T("postZeroRecv"));
 	DWORD dwBytes = 0;
 	DWORD dwFlags = 0;
 
@@ -634,7 +635,7 @@ void IOCPBase::ZeroRecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _p
 {
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
-
+	log_printf(_T("ZeroRecvSuccess"));
 	//char buf[1024] = { 0 };
 	//recv(pSock_Handle->s, buf, 1024, 0);
 	//log_printf(_T("ZeroRecvSuccess:%s"), buf);
@@ -693,13 +694,14 @@ void IOCPBase::RecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 	
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
+	log_printf(_T("ZeroRecvSuccess:%d"), _dwTranstion);
 
 	pSock_Handle->InitWRpos(_dwTranstion);
 	DWORD len = pSock_Handle->GetCmdDataLength();
 	while (len)
 	{
-		PSock_Buf workBuf = new Sock_Buf;
-		workBuf->Init(m_dwPagesize * 8 - SOCK_BUF_T_SIZE);
+		PSock_Buf workBuf = (PSock_Buf)malloc(m_dwPagesize * PAGE_NUMS);
+		workBuf->Init(m_dwPagesize * PAGE_NUMS - SOCK_BUF_T_SIZE);
 		pSock_Handle->Read(workBuf->data, len);
 		workBuf->dwRecvedCount = len;
 		workBuf->pRelateSockHandle = pSock_Handle;
@@ -749,7 +751,7 @@ BOOL IOCPBase::postSend(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 
 	_pBuf->pfnFailed = SendFaile;
 	_pBuf->pfnSuccess = SendSuccess;
-
+	log_printf(_T("postSend"));
 	if (SOCKET_ERROR == WSASend(_pSock_Handle->s, &_pBuf->wsaBuf, 1, &dwBytes, 0, &_pBuf->ol, NULL))
 	{
 		if (WSA_IO_PENDING != WSAGetLastError())
@@ -764,6 +766,7 @@ BOOL IOCPBase::postSend(PSock_Handle _pSock_Handle, PSock_Buf _pBuf)
 
 void IOCPBase::SendSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 {
+	log_printf(_T("SendSuccess:%d"), _dwTranstion);
 	if (_dwTranstion <= 0)
 		return SendFaile(_pSock_Handle, _pBuf);
 
@@ -815,6 +818,7 @@ void IOCPBase::SendSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 
 void IOCPBase::SendFaile(PVOID _pSock_Handle, PVOID _pBuf)
 {
+	log_printf(_T("SendFaile"));
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
 	free(pBuf);
@@ -855,6 +859,7 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 {
 	PSock_Buf pBuf = (PSock_Buf)pBuf_;
 	PSock_Handle pSock_Handle = (PSock_Handle)pBuf->pRelateSockHandle;
+	log_printf(_T("DoWorkProcessSuccess"));
 
 	msgpack::unpacker upk;
 	upk.reserve_buffer(pBuf->dwRecvedCount - 2);
@@ -867,9 +872,10 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 		str = oh.get().as<mystring>();
 		log_printf(_T("接收到的数据：%s"), str.c_str());
 	}
-
+	
 	_stprintf_s(pBuf->data, pBuf->datalen - 1, _T("RetrunData:%s"), str.c_str());
 	pBuf->dwRecvedCount = _tcslen(pBuf->data);
+	log_printf(_T("接收完成"));
 
 	//Send_PostEventMessage();
 
@@ -879,6 +885,10 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 		{
 			return SendFaile(pSock_Handle, pBuf);
 		}
+	}
+	else
+	{
+		log_printf(_T("CheckSend:FALSE"));
 	}
 }
 
@@ -998,6 +1008,7 @@ void IOCPBase::Fuc_SUnit(DWORD _dwIndex)
 
 void IOCPBase::Send_PostEventMessage(TCHAR* _buf, DWORD _bufsize)
 {
+	m_pCBufRing->writeData(_buf, _bufsize);
 	WSASetEvent(g_evtSend);
 }
 

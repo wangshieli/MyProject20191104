@@ -3,6 +3,7 @@
 #include "CBufferRing.h"
 
 #define LISTEN_PORT		6086
+#define PAGE_NUMS		8
 
 class IOCPBase
 {
