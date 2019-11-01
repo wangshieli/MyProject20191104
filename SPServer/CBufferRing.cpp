@@ -61,31 +61,9 @@ DWORD CBufferRing::writeData(TCHAR * _data, DWORD _datalen)
 			break;
 
 		bEmpty = FALSE;
-		if (dwReadPos == dwWritePos)
+		if (dwReadPos <= dwWritePos)
 		{
 			// »º³åÇøÎª¿Õ
-			DWORD dwLeftSize = dwBufSize - dwWritePos;
-			if (dwLeftSize > _datalen)
-			{
-				memcpy_s(buf + dwWritePos, dwLeftSize, _data, _datalen);
-				dwWritePos += _datalen;
-				bFull = (dwWritePos == dwReadPos);
-				dwWriteCounts = _datalen;
-				break;
-			}
-			else
-			{
-				memcpy_s(buf + dwWritePos, dwLeftSize, _data, dwLeftSize);
-				dwWritePos = (dwReadPos > (_datalen - dwLeftSize) ? (_datalen - dwLeftSize) : dwReadPos);
-				memcpy_s(buf, dwWritePos, _data + dwLeftSize, dwWritePos);
-				bFull = (dwWritePos == dwReadPos);
-				dwWriteCounts = dwLeftSize + dwWritePos;
-				break;
-			}
-		}
-		else if (dwReadPos < dwWritePos)
-		{
-			// Ë³Ðò
 			DWORD dwLeftSize = dwBufSize - dwWritePos;
 			if (dwLeftSize > _datalen)
 			{
