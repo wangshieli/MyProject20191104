@@ -23,30 +23,6 @@ void CBufferRing::Init(DWORD _bufsize)
 	buf = (TCHAR*)malloc(dwBufSize);
 }
 
-void CBufferRing::lock()
-{
-	EnterCriticalSection(&cs);
-}
-
-void CBufferRing::unlock()
-{
-	LeaveCriticalSection(&cs);
-}
-
-BOOL CBufferRing::isFull()
-{
-	return 0;
-}
-
-BOOL CBufferRing::isEmpty()
-{
-	return 0;
-}
-
-void CBufferRing::empty()
-{
-}
-
 DWORD CBufferRing::writeData(TCHAR * _data, DWORD _datalen)
 {
 	if (_datalen <= 0)
