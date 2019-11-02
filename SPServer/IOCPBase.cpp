@@ -378,7 +378,6 @@ unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
 			if (WSA_WAIT_TIMEOUT == dwError || WSA_WAIT_FAILED == dwError)
 				continue;
 
-			log_printf(_T("index = %d"), i);
 			WSAResetEvent(g_evtConnect[i]);
 
 			g_fucEvent[i](i);
