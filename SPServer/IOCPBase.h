@@ -35,6 +35,7 @@ private:
 	static PListen_Handle m_pListenHandle;	// 服务器监听
 	static PSock_Handle m_pSUnitHandle;		// 客户端连接
 	static SOCKET m_sockSend;				// 线程发送事件使用
+	static SOCKET m_sockReConnect;
 	static DWORD m_dwCpunums;
 	static DWORD m_dwPagesize;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -59,9 +60,19 @@ private:
 	static void SendSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf);
 	static void SendFaile(PVOID _pSock_Handle, PVOID _pBuf);
 
+	static BOOL SU_postZeroRecv(PSock_Handle _pSock_Handle, PSock_Buf _pBuf);	// 检查缓存区是否有接收数据
+	static void SU_ZeroRecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf);
+	static void SU_ZeroRecvFaile(PVOID _pSock_Handle, PVOID _pBuf);
+
+	static BOOL SU_postRecv(PSock_Handle _pSock_Handle, PSock_Buf _pBuf);	// 接收数据
+	static void SU_RecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf);
+	static void SU_RecvFaile(PVOID _pSock_Handle, PVOID _pBuf);
+
 private:
 	static void DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_);	// 业务处理
 	static void DoWorkProcessFaile(PVOID _pBuf, PVOID pBuf_);
+
+	static void SU_DoWorkProcessFaile(PVOID _pBuf, PVOID pBuf_);
 /*-------------------------------------------------------------------------------------------------*/
 
 /***************************************************************************************************/
@@ -73,7 +84,9 @@ private:
 	static void Fuc_SUnit(DWORD _dwIndex);	// 发送事件处理过程
 
 	static void Send_PostEventMessage(TCHAR* _buf, DWORD _bufsize);	// 发送事件
+	static void ReConnect_PostEventMessage();	// 发送事件
 	static void Fuc_Send(DWORD _dwIndex);	// 主动发送数据
+	static void Fuc_ReConnect(DWORD _dwIndex);
 
 private:
 	static CBufferRing* m_pCBufRing;

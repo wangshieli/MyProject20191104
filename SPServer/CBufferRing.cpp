@@ -7,6 +7,7 @@ CBufferRing::CBufferRing():dwWritePos(0)
 	, bEmpty(TRUE)
 	, bFull(FALSE)
 {
+	buf = NULL;
 	InitializeCriticalSection(&cs);
 }
 
@@ -20,7 +21,12 @@ CBufferRing::~CBufferRing()
 void CBufferRing::Init(DWORD _bufsize)
 {
 	dwBufSize = _bufsize;
-	buf = (TCHAR*)malloc(dwBufSize);
+	if (NULL == buf)
+		buf = (TCHAR*)malloc(dwBufSize);
+	dwWritePos = 0;
+	dwReadPos = 0;
+	bEmpty = TRUE;
+	bFull = FALSE;
 }
 
 DWORD CBufferRing::writeData(TCHAR * _data, DWORD _datalen)
