@@ -654,9 +654,6 @@ void IOCPBase::ZeroRecvSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _p
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
 	log_printf(_T("ZeroRecvSuccess"));
-	//char buf[1024] = { 0 };
-	//recv(pSock_Handle->s, buf, 1024, 0);
-	//log_printf(_T("ZeroRecvSuccess:%s"), buf);
 
 	if (!postRecv(pSock_Handle, pBuf))
 	{
