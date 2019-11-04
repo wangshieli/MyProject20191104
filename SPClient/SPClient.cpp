@@ -38,8 +38,7 @@ int main()
 	msgpack::sbuffer sbuf5;
 	msgpack::packer<msgpack::sbuffer> pk5(&sbuf5);
 	sbuf5.write("\xfb\xfc", 6);
-	/*pk5.pack("TestDssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss555555555544444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444ata");*/
-	pk5.pack("{\"requesthead\": \"SJ\",\"requestname\" : \"尹平\",\"requestway\" : \"1\"}");
+	pk5.pack("TestDssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss555555555544444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444ata");
 	size_t nLen5 = sbuf5.size();
 	unsigned char* pData = (unsigned char*)sbuf5.data();
 	BYTE nSum5 = csum(pData + 6, nLen5 - 6);
