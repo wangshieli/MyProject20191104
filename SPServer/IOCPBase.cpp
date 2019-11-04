@@ -18,6 +18,9 @@ typedef std::string	mystring;
 #endif // _STRING_
 #endif // UNICODE
 
+#define SERVER_IP	_T("192.168.24.104")
+#define SERVER_PORT	6666
+
 HANDLE g_evtListen[WSA_MAXIMUM_WAIT_EVENTS];
 DWORD g_nListens = 0;
 
@@ -355,7 +358,7 @@ BOOL IOCPBase::GetCpuNumsAndPagesize()
 BOOL IOCPBase::StartServer()
 {
 	//192.168.24.104 6666
-	InitSUnit(_T("192.168.24.104"), 6666);
+	InitSUnit(SERVER_IP, SERVER_PORT);
 
 	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, toolthread, NULL, 0, NULL);
 
@@ -1223,8 +1226,8 @@ void IOCPBase::Fuc_ReConnect(DWORD _dwIndex)
 	struct sockaddr_in addr;
 	memset(&addr, 0x00, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(6666);
-	InetPton(AF_INET, _T("192.168.24.104"), &addr.sin_addr.s_addr);
+	addr.sin_port = htons(SERVER_PORT);
+	InetPton(AF_INET, SERVER_IP, &addr.sin_addr.s_addr);
 	if (SOCKET_ERROR == connect(m_pSUnitHandle->s, (const sockaddr*)&addr, sizeof(addr))) // 如果服务器没打开会卡着
 	{
 		if (WSAEWOULDBLOCK != WSAGetLastError())
