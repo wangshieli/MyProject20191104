@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "IOCPBase.h"
 #include <string>
+#include <fstream>
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -10,12 +11,16 @@
 #ifdef _STRING_
 typedef std::wstring	mystring;
 #endif // _STRING_
+#define myifstream std::wifstream
+#define myofstream std::wofstream
 #else
 #define __MYFINE__		__FILE__
 #define __MYFUNCTION__		__FUNCTION__
 #ifdef _STRING_
 typedef std::string	mystring;
 #endif // _STRING_
+#define myifstream std::ifstream
+#define myofstream std::ofstream
 #endif // UNICODE
 
 #define SERVER_IP	_T("192.168.24.104")
@@ -1030,17 +1035,19 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 
 	Send_PostEventMessage(pBuf->data, pBuf->dwRecvedCount);
 
-	if (pSock_Handle->CheckSend(pBuf))
-	{
-		if (!postSend(pSock_Handle, pBuf))
-		{
-			return SendFaile(pSock_Handle, pBuf);
-		}
-	}
-	else
-	{
-		log_printf(_T("CheckSend:FALSE"));
-	}
+	SendFile(pSock_Handle, pBuf);
+
+	//if (pSock_Handle->CheckSend(pBuf))
+	//{
+	//	if (!postSend(pSock_Handle, pBuf))
+	//	{
+	//		return SendFaile(pSock_Handle, pBuf);
+	//	}
+	//}
+	//else
+	//{
+	//	log_printf(_T("CheckSend:FALSE"));
+	//}
 }
 
 void IOCPBase::DoWorkProcessFaile(PVOID _pBuf, PVOID pBuf_)
@@ -1245,4 +1252,62 @@ void IOCPBase::Fuc_ReConnect(DWORD _dwIndex)
 		}
 		free(pBuf);
 	}
+}
+
+void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
+{
+	PSock_Buf pBuf = (PSock_Buf)_pBuf;
+	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
+
+	do
+	{
+		myifstream inf(_T("SPServer.exe"), std::ios::binary | std::ios::_Nocreate);
+		if (!inf)
+		{
+			log_printf(_T("打开文件失败:%d"), GetLastError());
+			break;
+		}
+
+		DWORD len = (DWORD)inf.seekg(0, std::ios::end).tellg();
+		inf.seekg(0, std::ios::beg);
+		_stprintf_s(pBuf->data, pBuf->datalen, _T("%d"), len);
+		pBuf->dwRecvedCount = _tcslen(pBuf->data);
+		log_printf(_T("wsllllllllllllllllllllllllllllll:%d"), pBuf->dwRecvedCount);
+		if (pSock_Handle->CheckSend(pBuf))
+		{
+			if (!postSend(pSock_Handle, pBuf))
+			{
+				return SendFaile(pSock_Handle, pBuf);
+			}
+		}
+		else
+		{
+			log_printf(_T("CheckSend:FALSE"));
+		}
+
+		while (!inf.eof())
+		{
+			PSock_Buf workBuf = (PSock_Buf)malloc(m_dwPagesize * PAGE_NUMS);
+			workBuf->Init(m_dwPagesize * PAGE_NUMS - SOCK_BUF_T_SIZE);
+			pSock_Handle->AddRef();
+			workBuf->pRelateSockHandle = pSock_Handle;
+			workBuf->pfnFailed = SendFaile;
+			workBuf->pfnSuccess = SendSuccess;
+
+			inf.read(workBuf->data, workBuf->datalen);
+			workBuf->dwRecvedCount = (DWORD)inf.gcount();
+
+			if (pSock_Handle->CheckSend(workBuf))
+			{
+				if (!postSend(pSock_Handle, workBuf))
+				{
+					return SendFaile(pSock_Handle, workBuf);
+				}
+			}
+			else
+			{
+				log_printf(_T("CheckSend:FALSE"));
+			}
+		}
+	} while (FALSE);
 }

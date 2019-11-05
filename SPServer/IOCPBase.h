@@ -91,6 +91,8 @@ private:
 private:
 	static CBufferRing* m_pCBufRing;
 /***************************************************************************************************/
+
+	static void SendFile(PVOID _pSock_Handle, PVOID _pBuf);
 };
 
 

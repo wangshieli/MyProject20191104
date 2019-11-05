@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <fstream>
 
 BYTE csum(unsigned char *addr, int count)
 {
@@ -50,16 +51,33 @@ int main()
 	memcpy(pData + 2, &nLen5, 4);
 	nLen5 += 8;
 
-	for (int i = 0; i < 1; i++)
-	{
-		send(sock, sbuf5.data(), sbuf5.size(), 0);
-//		std::cout << WSAGetLastError() << std::endl;
 
-		char rBuf[1024] = { 0 };
-		recv(sock, rBuf, 1024, 0);
-		std::cout << i << _T(":") << rBuf << std::endl;
-		//Sleep(1000);
-}
+	send(sock, sbuf5.data(), sbuf5.size(), 0);
+	//		std::cout << WSAGetLastError() << std::endl;
+
+	std::ofstream outf(_T("Test.exe"), std::ios::binary);
+
+
+	char rBuf[1024] = { 0 };
+
+	int recvlen = 0;
+	recvlen = recv(sock, rBuf, 1024, 0);
+	std::cout << "test:" << recvlen << ":" << rBuf << std::endl;
+
+	DWORD alllen = (DWORD)atoll(rBuf);
+	
+	recvlen = 0;
+	DWORD hl = 0;
+	do
+	{
+		recvlen = recv(sock, rBuf, 1024, 0);
+		std::cout << recvlen << std::endl;
+		outf.write(rBuf, recvlen);
+		hl += recvlen;
+	} while (alllen > hl);
+	outf.close();
+
+	//Sleep(1000);
 	
 
 	/*msgpack::unpacker pac5;
@@ -73,7 +91,7 @@ int main()
 		std::string str = oh5.get().as<std::string>();
 		std::cout << str << std::endl;
 	}*/
-
+	_tsystem(_T("pause"));
     std::cout << "Hello World!\n"; 
 }
 
