@@ -1274,7 +1274,6 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 		inf.seekg(0, std::ios::beg);
 		_stprintf_s(pBuf->data, pBuf->datalen, _T("%d"), len);
 		pBuf->dwRecvedCount = _tcslen(pBuf->data);
-		log_printf(_T("wsllllllllllllllllllllllllllllll:%d"), pBuf->dwRecvedCount);
 		if (pSock_Handle->CheckSend(pBuf))
 		{
 			if (!postSend(pSock_Handle, pBuf))
