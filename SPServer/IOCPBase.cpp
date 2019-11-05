@@ -1265,6 +1265,8 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 		if (!inf)
 		{
 			log_printf(_T("打开文件失败:%d"), GetLastError());
+			_stprintf_s(pBuf->data, pBuf->datalen, _T("打开文件失败"));
+			pBuf->dwRecvedCount = _tcslen(pBuf->data);
 			break;
 		}
 
@@ -1279,10 +1281,6 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 			{
 				return SendFaile(pSock_Handle, pBuf);
 			}
-		}
-		else
-		{
-			log_printf(_T("CheckSend:FALSE"));
 		}
 
 		while (!inf.eof())
@@ -1304,10 +1302,15 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 					return SendFaile(pSock_Handle, workBuf);
 				}
 			}
-			else
-			{
-				log_printf(_T("CheckSend:FALSE"));
-			}
 		}
+		return;
 	} while (FALSE);
+
+	if (pSock_Handle->CheckSend(pBuf))
+	{
+		if (!postSend(pSock_Handle, pBuf))
+		{
+			return SendFaile(pSock_Handle, pBuf);
+		}
+	}
 }
