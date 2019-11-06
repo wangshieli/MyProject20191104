@@ -842,8 +842,6 @@ void IOCPBase::SendSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 	if (pBuf)
 	{
 		InterlockedDecrement(&pSock_Handle->nRef);
-		pBuf->pfnFailed = SendFaile;
-		pBuf->pfnSuccess = SendSuccess;
 		if (!postSend(pSock_Handle, pBuf))
 		{
 			SendFaile(pSock_Handle, pBuf);
@@ -1296,7 +1294,7 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 
 	do
 	{
-		myifstream inf(_T("SPServer.exe"), std::ios::binary | std::ios::_Nocreate);
+		myifstream inf(_T("src.exe"), std::ios::binary | std::ios::_Nocreate);
 		if (!inf)
 		{
 			log_printf(_T("打开文件失败:%d"), GetLastError());
@@ -1313,6 +1311,7 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 		{
 			if (!postSend(pSock_Handle, pBuf))
 			{
+				inf.close();
 				return SendFaile(pSock_Handle, pBuf);
 			}
 		}
@@ -1333,10 +1332,12 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 			{
 				if (!postSend(pSock_Handle, workBuf))
 				{
+					inf.close();
 					return SendFaile(pSock_Handle, workBuf);
 				}
 			}
 		}
+		inf.close();
 		return;
 	} while (FALSE);
 

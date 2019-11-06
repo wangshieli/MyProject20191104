@@ -51,10 +51,10 @@ int main()
 	memcpy(pData + 2, &nLen5, 4);
 	nLen5 += 8;
 
-	std::cout << "begin" << std::endl;
-	char rBuf[1024] = { 0 };
-	recv(sock, rBuf, 1024, 0);
-	std::cout << "test" << std::endl;
+	char rBuf[1024*4] = { 0 };
+	//std::cout << "begin" << std::endl;
+	//recv(sock, rBuf, 1024, 0);
+	//std::cout << "test" << std::endl;
 
 	send(sock, sbuf5.data(), sbuf5.size(), 0);
 	//		std::cout << WSAGetLastError() << std::endl;
@@ -62,21 +62,26 @@ int main()
 	std::ofstream outf(_T("Test.exe"), std::ios::binary);
 
 	int recvlen = 0;
-	recvlen = recv(sock, rBuf, 1024, 0);
+	int rl = 1024 * 4;
+	recvlen = recv(sock, rBuf, rl, 0);
 	std::cout << "test:" << recvlen << ":" << rBuf << std::endl;
 
 	DWORD alllen = (DWORD)atoll(rBuf);
 	
 	recvlen = 0;
 	DWORD hl = 0;
+	DWORD dwStart = GetTickCount();
 	do
 	{
-		recvlen = recv(sock, rBuf, 1024, 0);
-		std::cout << recvlen << std::endl;
+		recvlen = recv(sock, rBuf, rl, 0);
+		//std::cout << recvlen << std::endl;
 		outf.write(rBuf, recvlen);
 		hl += recvlen;
 	} while (alllen > hl);
+	DWORD dwEnd = GetTickCount();
 	outf.close();
+
+	std::cout << dwEnd - dwStart << std::endl;
 
 	_tsystem(_T("pause"));
     std::cout << "Hello World!\n"; 
