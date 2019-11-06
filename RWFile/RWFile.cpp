@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <list>
 
 // std::ios::app;	// 以追加的方式打开文件
 // std::ios::ate;	// 文件打开之后定位到文件尾，ios:app就包含此属性 

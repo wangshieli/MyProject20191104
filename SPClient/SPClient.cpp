@@ -39,7 +39,7 @@ int main()
 	msgpack::sbuffer sbuf5;
 	msgpack::packer<msgpack::sbuffer> pk5(&sbuf5);
 	sbuf5.write("\xfb\xfc", 6);
-	pk5.pack("TestDssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss555555555544444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444ata");
+	pk5.pack("TestData");
 	size_t nLen5 = sbuf5.size();
 	unsigned char* pData = (unsigned char*)sbuf5.data();
 	BYTE nSum5 = csum(pData + 6, nLen5 - 6);
@@ -51,14 +51,15 @@ int main()
 	memcpy(pData + 2, &nLen5, 4);
 	nLen5 += 8;
 
+	std::cout << "begin" << std::endl;
+	char rBuf[1024] = { 0 };
+	recv(sock, rBuf, 1024, 0);
+	std::cout << "test" << std::endl;
 
 	send(sock, sbuf5.data(), sbuf5.size(), 0);
 	//		std::cout << WSAGetLastError() << std::endl;
 
 	std::ofstream outf(_T("Test.exe"), std::ios::binary);
-
-
-	char rBuf[1024] = { 0 };
 
 	int recvlen = 0;
 	recvlen = recv(sock, rBuf, 1024, 0);
@@ -77,20 +78,6 @@ int main()
 	} while (alllen > hl);
 	outf.close();
 
-	//Sleep(1000);
-	
-
-	/*msgpack::unpacker pac5;
-	pac5.reserve_buffer(sbuf5.size());
-	memcpy_s(pac5.buffer(), sbuf5.size()- 8, pData + 6, sbuf5.size() - 8);
-	pac5.buffer_consumed(sbuf5.size() - 8);
-	msgpack::object_handle oh5;
-	while (pac5.next(oh5))
-	{
-		std::cout << oh5.get() << std::endl;
-		std::string str = oh5.get().as<std::string>();
-		std::cout << str << std::endl;
-	}*/
 	_tsystem(_T("pause"));
     std::cout << "Hello World!\n"; 
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include <list>
 
 typedef void(*PTIoReqSuccess)(DWORD dwTranstion, void* key, void* buf);
 typedef void(*PTIoReqFailed)(void* key, void* buf);
@@ -7,6 +8,22 @@ typedef struct st_listen
 {
 	SOCKET sListenSock;
 	HANDLE evtPostAcceptEx;
+	std::list<SOCKET> s_list;
+	CRITICAL_SECTION cs;
+
+	void add2list(SOCKET s)
+	{
+		EnterCriticalSection(&cs);
+		s_list.push_back(s);
+		LeaveCriticalSection(&cs);
+	}
+
+	void del3list(SOCKET s)
+	{
+		EnterCriticalSection(&cs);
+		s_list.remove(s);
+		LeaveCriticalSection(&cs);
+	}
 }Listen_Handle, *PListen_Handle;
 
 typedef struct sock_buf_t

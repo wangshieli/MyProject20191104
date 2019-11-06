@@ -64,6 +64,7 @@ PSock_Handle IOCPBase::m_pSUnitHandle = NULL;
 SOCKET IOCPBase::m_sockSend = INVALID_SOCKET;
 SOCKET IOCPBase::m_sockReConnect = INVALID_SOCKET;
 DWORD IOCPBase::m_dwCpunums = 0;
+DWORD IOCPBase::m_dwThreadCounts = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
 CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing();
 
@@ -204,6 +205,7 @@ BOOL IOCPBase::InitListenSocket(USHORT _port)
 			break;
 		}
 
+		InitializeCriticalSection(&m_pListenHandle->cs);
 		m_pListenHandle->evtPostAcceptEx = WSACreateEvent();
 		if (WSA_INVALID_EVENT == m_pListenHandle->evtPostAcceptEx)
 		{
@@ -365,19 +367,14 @@ BOOL IOCPBase::StartServer()
 	//192.168.24.104 6666
 	InitSUnit(SERVER_IP, SERVER_PORT);
 
-	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, toolthread, NULL, 0, NULL);
-
-	DWORD _dwThreadCounts = m_dwCpunums * 2 + 2;
-	for (DWORD i = 0; i < _dwThreadCounts; i++)
+	m_dwThreadCounts = m_dwCpunums * 2 + 2;
+	for (DWORD i = 0; i < m_dwThreadCounts; i++)
 	{
 		HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, workthread, NULL, 0, NULL);
 	}
 
-	DWORD _dwClienCounts = _dwThreadCounts * 5;
-	for (DWORD i = 0; i < _dwClienCounts; i++)
-	{
-		postAcceptEx();
-	}
+	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, toolthread, NULL, 0, NULL);
+
 	return 0;
 }
 
@@ -410,6 +407,12 @@ unsigned int _stdcall IOCPBase::sunitthread(PVOID pVoid)
 
 unsigned int _stdcall IOCPBase::toolthread(PVOID pVoid)
 {
+	DWORD _dwClienCounts = m_dwThreadCounts * 5;
+	for (DWORD i = 0; i < 1; i++)
+	{
+		postAcceptEx();
+	}
+
 	while (true)
 	{
 		DWORD dwIndex = WSAWaitForMultipleEvents(g_nListens, g_evtListen, FALSE, INFINITE, FALSE);
@@ -418,12 +421,48 @@ unsigned int _stdcall IOCPBase::toolthread(PVOID pVoid)
 			log_printf(_T("异常退出:%d"), WSAGetLastError());
 			return 0;
 		}
+
+		int nError = 0;
+		int optval = 0;;
+		int optlen = sizeof(int);
+		EnterCriticalSection(&m_pListenHandle->cs);
+		for (std::list<SOCKET>::const_iterator iter = m_pListenHandle->s_list.begin(); iter != m_pListenHandle->s_list.end(); iter++)
+		{
+			nError = getsockopt(*iter, SOL_SOCKET, SO_CONNECT_TIME, (char*)&optval, &optlen);
+			if (SOCKET_ERROR == nError)
+			{
+				log_printf(_T("toolthread:%d"), WSAGetLastError());
+				CancelIo((HANDLE)*iter);
+				closesocket(*iter);
+				continue;
+			}
+
+			log_printf(_T("long time:%d"), optval);
+
+			if (0xFFFFFFFF != optval && optval > 3)
+			{
+				CancelIo((HANDLE)*iter);
+				closesocket(*iter);
+			}
+		}
+		LeaveCriticalSection(&m_pListenHandle->cs);
+
 		WSAResetEvent(g_evtListen[dwIndex - WSA_WAIT_EVENT_0]);
 
-		for (DWORD i = 0; i < m_dwCpunums * 2; i++)
+		for (DWORD i = 0; i < _dwClienCounts; i++)
 		{
 			postAcceptEx();
 		}
+
+		// BOOL CancelIo(HANDLE hFile);
+		// CancelIo该函数取消对该文件句柄的所有等待的I/O操作，也可以关闭设备句柄，来取消所有已经添加到队列中的所有IO请求。
+
+		// CancelIo 只能取消主调线程发送的IO操作，而其他线程的IO请求是不会被取消的，如果要取消所有线程的IO请求，可以使用CancelIoEx
+
+		// BOOL CancelIoEx(HANDLE hFile, LPOVERLAPPED pOverlapped);
+		// CancelIoEx能够取消给定文件句柄的一个指定IO请求，如果pOverlapped为NULL，那么CancelIoEx会将hFile指定的设备的所有待处理IO请求都取消掉
+
+		// DisconnectEx
 	}
 	return 0;
 }
@@ -513,6 +552,7 @@ BOOL IOCPBase::postAcceptEx()
 		_pBuf->pRelateSockHandle = _pSock_Handle;
 		_pBuf->pfnSuccess = AcceptExSuccess;
 		_pBuf->pfnFailed = AcceptExFaile;
+		m_pListenHandle->add2list(_pSock_Handle->s);
 		if (!m_pfnAcceptEx(m_pListenHandle->sListenSock, _pSock_Handle->s, _pSock_Handle->buf
 			, _pSock_Handle->dwBufsize - ((sizeof(sockaddr_in) + 16) * 2)
 			, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, &dwBytes, &_pBuf->ol))
@@ -520,6 +560,7 @@ BOOL IOCPBase::postAcceptEx()
 			if (WSA_IO_PENDING != WSAGetLastError())
 			{
 				log_printf(_T("AcceptEx失败:%d"), WSAGetLastError());
+				m_pListenHandle->del3list(_pSock_Handle->s);
 				break;
 			}
 		}
@@ -543,6 +584,8 @@ void IOCPBase::AcceptExSuccess(DWORD _dwTranstion, PVOID _pListen_Handle, PVOID 
 	PListen_Handle pListen_Hnalde = (PListen_Handle)_pListen_Handle;
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)pBuf->pRelateSockHandle;
+
+	pListen_Hnalde->del3list(pSock_Handle->s);
 
 	if (SOCKET_ERROR == WSAIoctl(pSock_Handle->s, SIO_KEEPALIVE_VALS, &alive_in, sizeof(alive_in),
 		&alive_out, sizeof(alive_out), &ulBytesReturn, NULL, NULL))
@@ -605,6 +648,8 @@ void IOCPBase::AcceptExFaile(PVOID _pListen_Handle, PVOID _pBuf)
 	PListen_Handle pListen_Hnalde = (PListen_Handle)_pListen_Handle;
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)pBuf->pRelateSockHandle;
+
+	pListen_Hnalde->del3list(pSock_Handle->s);
 
 	if (NULL != pSock_Handle)
 	{

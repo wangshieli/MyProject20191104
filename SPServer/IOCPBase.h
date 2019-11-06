@@ -37,6 +37,7 @@ private:
 	static SOCKET m_sockSend;				// 线程发送事件使用
 	static SOCKET m_sockReConnect;
 	static DWORD m_dwCpunums;
+	static DWORD m_dwThreadCounts;
 	static DWORD m_dwPagesize;
 /*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
