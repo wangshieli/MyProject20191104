@@ -3,22 +3,23 @@
 
 typedef void(*PTIoReqSuccess)(DWORD dwTranstion, void* key, void* buf);
 typedef void(*PTIoReqFailed)(void* key, void* buf);
+typedef struct sock_buf Sock_Buf, *PSock_Buf;
 
 typedef struct st_listen
 {
 	SOCKET sListenSock;
 	HANDLE evtPostAcceptEx;
-	std::list<SOCKET> s_list;
+	std::list<PSock_Buf> s_list;
 	CRITICAL_SECTION cs;
 
-	void add2list(SOCKET s)
+	void add2list(PSock_Buf s)
 	{
 		EnterCriticalSection(&cs);
 		s_list.push_back(s);
 		LeaveCriticalSection(&cs);
 	}
 
-	void del3list(SOCKET s)
+	void del3list(PSock_Buf s)
 	{
 		EnterCriticalSection(&cs);
 		s_list.remove(s);
@@ -39,7 +40,7 @@ typedef struct sock_buf_t
 }SOCK_BUF_T;
 #define SOCK_BUF_T_SIZE sizeof(SOCK_BUF_T)
 
-typedef struct sock_buf
+struct sock_buf
 {
 	WSAOVERLAPPED ol;
 	PTIoReqFailed pfnFailed;
@@ -61,7 +62,7 @@ typedef struct sock_buf
 		pRelateSockHandle = NULL;
 		datalen = dwSize;
 	}
-}Sock_Buf, *PSock_Buf;
+};
 #define SOCK_BUF_SIZE sizeof(Sock_Buf)
 
 typedef struct sock_handle_t
