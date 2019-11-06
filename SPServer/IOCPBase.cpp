@@ -454,6 +454,10 @@ unsigned int _stdcall IOCPBase::toolthread(PVOID pVoid)
 			postAcceptEx();
 		}
 
+		// acceptex连接未发送数据，直接调用closesocket，非此线程申请的不能返回
+		// cancleio cancelioex没有直接返回到workthread中，只有closesocket之后才能接收到通知
+		// cancelioex不能取消其他线程的申请，不知道为什么
+
 		// BOOL CancelIo(HANDLE hFile);
 		// CancelIo该函数取消对该文件句柄的所有等待的I/O操作，也可以关闭设备句柄，来取消所有已经添加到队列中的所有IO请求。
 
