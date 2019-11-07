@@ -63,7 +63,7 @@ int main()
 
 	int recvlen = 0;
 	int rl = 1024 * 4;
-	recvlen = recv(sock, rBuf, rl, 0);
+	recvlen = recv(sock, rBuf, 9, 0);
 	std::cout << "test:" << recvlen << ":" << rBuf << std::endl;
 
 	DWORD alllen = (DWORD)atoll(rBuf);

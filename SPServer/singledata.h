@@ -79,7 +79,7 @@ typedef struct sock_handle_t
 	BOOL bFull;
 	BOOL bEmpty;
 	BYTE sum;
-	volatile long nRef;
+	volatile unsigned long long nRef;
 }SOCK_HANDLE_T;
 #define SOCK_HANDLE_T_SIZE sizeof(SOCK_HANDLE_T)
 
@@ -97,7 +97,7 @@ typedef struct sock_handle
 	BOOL bFull;
 	BOOL bEmpty;
 	BYTE sum;
-	volatile long nRef;
+	volatile unsigned long long nRef;
 	CHAR buf[1];
 
 	void Init(DWORD _Bufsize)

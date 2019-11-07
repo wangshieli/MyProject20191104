@@ -12,9 +12,9 @@ public:
 
 private:
 	TCHAR *buf;
-	DWORD dwBufSize;
-	DWORD dwWritePos;
-	DWORD dwReadPos;
+	volatile DWORD dwBufSize;
+	volatile DWORD dwWritePos;
+	volatile DWORD dwReadPos;
 	BOOL bEmpty;
 	BOOL bFull;
 	CRITICAL_SECTION cs;

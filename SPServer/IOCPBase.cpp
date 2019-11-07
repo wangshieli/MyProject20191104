@@ -42,6 +42,7 @@ HANDLE g_evtSUnit = INVALID_HANDLE_VALUE;
 
 void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
 {
+#ifdef _DEBUG
 	mystring _temp(_T("%s_%s_%d:"));
 	_temp.append(format);
 	_temp.append(_T("\n"));
@@ -49,6 +50,7 @@ void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ..
 	va_start(va, format);
 	_vtprintf_s(_temp.c_str(), va);
 	va_end(va);
+#endif // _DEBUG
 }
 
 #define log_printf(format, ...) LOG(format, __MYFINE__	, __MYFUNCTION__, __LINE__, __VA_ARGS__)
@@ -365,9 +367,9 @@ BOOL IOCPBase::GetCpuNumsAndPagesize()
 BOOL IOCPBase::StartServer()
 {
 	//192.168.24.104 6666
-	InitSUnit(SERVER_IP, SERVER_PORT);
+	//InitSUnit(SERVER_IP, SERVER_PORT);
 
-	m_dwThreadCounts = m_dwCpunums * 2 + 2;
+	m_dwThreadCounts = m_dwCpunums;
 	for (DWORD i = 0; i < m_dwThreadCounts; i++)
 	{
 		HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, workthread, NULL, 0, NULL);
@@ -606,6 +608,10 @@ void IOCPBase::AcceptExSuccess(DWORD _dwTranstion, PVOID _pListen_Handle, PVOID 
 	while (len)
 	{
 		PSock_Buf workBuf = (PSock_Buf)malloc(m_dwPagesize * PAGE_NUMS);
+		if (NULL == workBuf)
+		{
+			_tprintf_s(_T("(NULL == workBuf)"));
+		}
 		workBuf->Init(m_dwPagesize * PAGE_NUMS - SOCK_BUF_T_SIZE);
 		pSock_Handle->Read(workBuf->data, len);
 		workBuf->dwRecvedCount = len;
@@ -826,6 +832,10 @@ void IOCPBase::SendSuccess(DWORD _dwTranstion, PVOID _pSock_Handle, PVOID _pBuf)
 
 	PSock_Buf pBuf = (PSock_Buf)_pBuf;
 	PSock_Handle pSock_Handle = (PSock_Handle)_pSock_Handle;
+	if (NULL == pSock_Handle)
+	{
+		_tprintf_s(_T("NULL == pSock_Handle"));
+	}
 
 	pBuf->dwSendedCount += _dwTranstion;
 	if (pBuf->dwSendedCount < pBuf->dwRecvedCount)
@@ -1066,7 +1076,7 @@ void IOCPBase::DoWorkProcessSuccess(DWORD _dwTranstion, PVOID _pBuf, PVOID pBuf_
 	pBuf->dwRecvedCount = _tcslen(pBuf->data);
 	log_printf(_T("接收完成"));
 
-	Send_PostEventMessage(pBuf->data, pBuf->dwRecvedCount);
+//	Send_PostEventMessage(pBuf->data, pBuf->dwRecvedCount);
 
 	SendFile(pSock_Handle, pBuf);
 
@@ -1319,11 +1329,16 @@ void IOCPBase::SendFile(PVOID _pSock_Handle, PVOID _pBuf)
 		while (!inf.eof())
 		{
 			PSock_Buf workBuf = (PSock_Buf)malloc(m_dwPagesize * PAGE_NUMS);
+			if (NULL == workBuf)
+			{
+				_tprintf_s(_T("workBuf内存分配失败:%d"), GetLastError());
+				_stprintf_s(pBuf->data, pBuf->datalen, _T("workBuf内存分配失败"));
+				pBuf->dwRecvedCount = _tcslen(pBuf->data);
+				break;
+			}
 			workBuf->Init(m_dwPagesize * PAGE_NUMS - SOCK_BUF_T_SIZE);
 			pSock_Handle->AddRef();
 			workBuf->pRelateSockHandle = pSock_Handle;
-			workBuf->pfnFailed = SendFaile;
-			workBuf->pfnSuccess = SendSuccess;
 
 			inf.read(workBuf->data, workBuf->datalen);
 			workBuf->dwRecvedCount = (DWORD)inf.gcount();
