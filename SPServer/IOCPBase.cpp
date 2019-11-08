@@ -23,6 +23,8 @@ typedef std::string	mystring;
 #define myofstream std::ofstream
 #endif // UNICODE
 
+#define SPServer_THE_ONE_INSTANCE	_T("Global\\Event_SPServer_The_One_Instance")
+
 #define SERVER_IP	_T("192.168.24.104")
 #define SERVER_PORT	6666
 
@@ -40,8 +42,6 @@ HANDLE g_evtSend = INVALID_HANDLE_VALUE;
 HANDLE g_evtReConnect = INVALID_HANDLE_VALUE;
 HANDLE g_evtSUnit = INVALID_HANDLE_VALUE;
 
-#define SPServer_THE_ONE_INSTANCE	_T("Global\\Event_SPServer_The_One_Instance")
-
 LPFN_ACCEPTEX	IOCPBase::m_pfnAcceptEx = NULL;
 LPFN_GETACCEPTEXSOCKADDRS	IOCPBase::m_pfnAcceptExSockaddrs = NULL;
 LPFN_DISCONNECTEX	IOCPBase::m_pfnConnectEx = NULL;
@@ -54,6 +54,19 @@ DWORD IOCPBase::m_dwCpunums = 0;
 DWORD IOCPBase::m_dwThreadCounts = 0;
 DWORD IOCPBase::m_dwPagesize = 0;
 CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing();
+
+void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
+{
+#ifdef _DEBUG
+	mystring _temp(_T("%s_%s_%d:"));
+	_temp.append(format);
+	_temp.append(_T("\n"));
+	va_list va;
+	va_start(va, format);
+	_vtprintf_s(_temp.c_str(), va);
+	va_end(va);
+#endif // _DEBUG
+}
 
 IOCPBase::IOCPBase(): m_hUniqueInstance(INVALID_HANDLE_VALUE)
 	//, m_pfnAcceptEx(NULL)
