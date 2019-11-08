@@ -22,6 +22,7 @@ private:
 	static BOOL GetCpuNumsAndPagesize();
 	static BOOL StartServer();					// 启动服务线程
 
+	static unsigned int _stdcall logthread(PVOID pVoid);
 	static unsigned int _stdcall sunitthread(PVOID pVoid);	// 处理作为客户端时的发送
 	static unsigned int _stdcall toolthread(PVOID pVoid);	// 服务器accept
 	static unsigned int _stdcall workthread(PVOID pVoid);	// 服务器业务

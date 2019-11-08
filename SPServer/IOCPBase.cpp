@@ -341,7 +341,7 @@ BOOL IOCPBase::GetCpuNumsAndPagesize()
 BOOL IOCPBase::StartServer()
 {
 	//192.168.24.104 6666
-	//InitSUnit(SERVER_IP, SERVER_PORT);
+	InitSUnit(SERVER_IP, SERVER_PORT);
 
 	m_dwThreadCounts = m_dwCpunums;
 	for (DWORD i = 0; i < m_dwThreadCounts; i++)
@@ -351,6 +351,11 @@ BOOL IOCPBase::StartServer()
 
 	HANDLE hThread = (HANDLE)_beginthreadex(NULL, 0, toolthread, NULL, 0, NULL);
 
+	return 0;
+}
+
+unsigned int _stdcall IOCPBase::logthread(PVOID pVoid)
+{
 	return 0;
 }
 
