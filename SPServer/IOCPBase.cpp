@@ -69,11 +69,6 @@ void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ..
 }
 
 IOCPBase::IOCPBase(): m_hUniqueInstance(INVALID_HANDLE_VALUE)
-	//, m_pfnAcceptEx(NULL)
-	//, m_pfnAcceptExSockaddrs(NULL)
-	//, m_pfnConnectEx(NULL)
-	//, m_hIocp(INVALID_HANDLE_VALUE)
-	//, m_pListenHandle(NULL)
 {
 	if (!UniqueServerInstance() || !InitWinsock2() || !GetExtensFunction() || !CreateIoCompletionPortHandle() || !InitListenSocket(LISTEN_PORT) || !GetCpuNumsAndPagesize())
 		return;
