@@ -57,7 +57,6 @@ CBufferRing* IOCPBase::m_pCBufRing = new CBufferRing();
 
 void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ...)
 {
-#ifdef _DEBUG
 	mystring _temp(_T("%s_%s_%d:"));
 	_temp.append(format);
 	_temp.append(_T("\n"));
@@ -65,8 +64,13 @@ void LOG(LPCTSTR format, LPCTSTR _filename, LPCTSTR _funcname, LONG _linenum, ..
 	va_start(va, format);
 	_vtprintf_s(_temp.c_str(), va);
 	va_end(va);
-#endif // _DEBUG
 }
+
+#ifdef _DEBUG
+#define log_printf(format, ...) LOG(format, __MYFINE__	, __MYFUNCTION__, __LINE__, __VA_ARGS__)
+#else
+#define log_printf(format, ...)
+#endif // _DEBUG
 
 IOCPBase::IOCPBase(): m_hUniqueInstance(INVALID_HANDLE_VALUE)
 {
